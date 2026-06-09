@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent, Suspense } from 'react';
 import Link from 'next/link';
 import { Plus, Search, Filter } from 'lucide-react';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -14,7 +14,7 @@ import type { Product } from '@/types/product';
 
 const DEFAULT_PAGE_SIZE = 12;
 
-export default function ProductsPage() {
+function ProductsPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -271,5 +271,19 @@ export default function ProductsPage() {
         </section>
       </div>
     </AdminPageShell>
+  );
+}
+
+export default function ProductsPage() {
+  return (
+    <Suspense fallback={
+      <AdminPageShell title="Products" description="Create, edit, and manage all product listings in your store.">
+        <div className="flex h-96 items-center justify-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+        </div>
+      </AdminPageShell>
+    }>
+      <ProductsPageContent />
+    </Suspense>
   );
 }

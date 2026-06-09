@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, type FormEvent } from 'react';
+import { useMemo, type FormEvent, Suspense } from 'react';
 import { Search, Filter, RefreshCcw } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AdminPageShell from '@/components/admin/AdminPageShell';
@@ -29,7 +29,7 @@ const PAYMENT_STATUSES = [
   { value: 'refunded', label: 'Refunded' },
 ] as const;
 
-export default function OrdersPage() {
+function OrdersPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -230,5 +230,19 @@ export default function OrdersPage() {
         </section>
       </div>
     </AdminPageShell>
+  );
+}
+
+export default function OrdersPage() {
+  return (
+    <Suspense fallback={
+      <AdminPageShell title="Orders" description="Review and manage customer orders, update statuses, and process refunds.">
+        <div className="flex h-96 items-center justify-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+        </div>
+      </AdminPageShell>
+    }>
+      <OrdersPageContent />
+    </Suspense>
   );
 }
