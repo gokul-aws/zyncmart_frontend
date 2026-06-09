@@ -56,7 +56,7 @@ export interface ProductCreatePayload {
   images?: ProductImage[];
 }
 
-export interface ProductUpdatePayload extends ProductCreatePayload {}
+export interface ProductUpdatePayload extends Partial<ProductCreatePayload> {}
 
 export interface ProductFilters {
   category?: string;

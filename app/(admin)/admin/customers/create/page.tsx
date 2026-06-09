@@ -15,14 +15,14 @@ const createUserSchema = z.object({
   phone: z.string().min(10, 'Enter a valid phone number').optional(),
   password: z.string().min(8, 'Password must be at least 8 characters'),
   role: z.enum(['user', 'admin']),
-  isActive: z.boolean(),
+  isActive: z.preprocess((val) => val === 'true' || val === true, z.boolean()).optional(),
 });
 
 export default function CreateUserPage() {
   const router = useRouter();
   const createUserMutation = useCreateAdminUser();
 
-  const { register, handleSubmit, formState: { errors, isSubmitting }, watch } = useForm<CreateUserPayload>({
+  const { register, handleSubmit, formState: { errors, isSubmitting }, watch } = useForm({
     resolver: zodResolver(createUserSchema),
     defaultValues: {
       name: '',
@@ -36,8 +36,8 @@ export default function CreateUserPage() {
 
   const role = watch('role');
 
-  const onSubmit = async (values: CreateUserPayload) => {
-    await createUserMutation.mutateAsync(values);
+  const onSubmit = async (values: any) => {
+    await createUserMutation.mutateAsync(values as CreateUserPayload);
   };
 
   const roleLabel = useMemo(
@@ -121,7 +121,7 @@ export default function CreateUserPage() {
             <label className="block">
               <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Account status</span>
               <select
-                {...register('isActive', { valueAsBoolean: true })}
+                {...register('isActive')}
                 className="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
               >
                 <option value="true">Active</option>
@@ -144,7 +144,7 @@ export default function CreateUserPage() {
             </button>
             <button
               type="submit"
-              disabled={isSubmitting || createUserMutation.isLoading}
+              disabled={isSubmitting || createUserMutation.isPending}
               className="inline-flex items-center justify-center rounded-2xl bg-primary px-5 py-3 text-sm font-semibold text-white hover:bg-primary-dark transition-colors disabled:cursor-not-allowed disabled:opacity-60"
             >
               Create user

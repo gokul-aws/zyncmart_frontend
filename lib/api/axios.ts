@@ -16,10 +16,7 @@ api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
     const { useAuthStore } = await import('@/lib/store/authStore');
     const token: string | null = useAuthStore.getState().accessToken;
     if (token) {
-      config.headers = {
-        ...config.headers,
-        Authorization: `Bearer ${token}`,
-      };
+      config.headers.set('Authorization', `Bearer ${token}`);
     }
   }
   return config;
@@ -59,10 +56,7 @@ api.interceptors.response.use(
         }
 
         if (config.headers) {
-          config.headers = {
-            ...config.headers,
-            Authorization: `Bearer ${newToken}`,
-          };
+          config.headers.set('Authorization', `Bearer ${newToken}`);
         }
 
         return api(config);

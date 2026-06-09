@@ -10,12 +10,14 @@ export interface Address {
   isDefault?: boolean;
 }
 
+export type UserRole = 'user' | 'admin';
+
 export interface User {
   _id: string;
   name: string;
   email: string;
   phone?: string;
-  role: 'user' | 'admin';
+  role: UserRole;
   isActive?: boolean;
   addresses: Address[];
   createdAt: string;

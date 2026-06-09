@@ -2,7 +2,7 @@ export type PaymentMethod = 'razorpay' | 'cod';
 
 export interface StoreConfigSettings {
   storeName: string;
-  storeDescription: string;
+  storeDescription?: string;
   storeEmail: string;
   storePhone: string;
   storeAddressLine1: string;

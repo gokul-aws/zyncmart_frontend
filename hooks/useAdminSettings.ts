@@ -7,7 +7,7 @@ import { fetchAdminSettings, updateAdminSettings } from '@/lib/api/settings';
 import type { AdminSettings, UpdateAdminSettingsPayload } from '@/types/settings';
 
 export function useAdminSettings() {
-  return useQuery({
+  return useQuery<AdminSettings>({
     queryKey: ['admin', 'settings'],
     queryFn: fetchAdminSettings,
     staleTime: 60_000,

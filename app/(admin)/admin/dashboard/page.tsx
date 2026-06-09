@@ -28,13 +28,13 @@ export default function DashboardPage() {
   const { data, isLoading, isError, refetch } = useDashboardStats();
 
   const statusSummary = useMemo(() => {
-    const statusCounts = data?.orderStatusCounts ?? {};
+    const statusCounts = data?.orderStatusCounts;
     return [
-      { label: 'Placed', value: statusCounts.placed ?? 0, variant: 'warning' as const },
-      { label: 'Processing', value: statusCounts.processing ?? 0, variant: 'warning' as const },
-      { label: 'Shipped', value: statusCounts.shipped ?? 0, variant: 'default' as const },
-      { label: 'Delivered', value: statusCounts.delivered ?? 0, variant: 'success' as const },
-      { label: 'Cancelled', value: statusCounts.cancelled ?? 0, variant: 'error' as const },
+      { label: 'Placed', value: statusCounts?.placed ?? 0, variant: 'warning' as const },
+      { label: 'Processing', value: statusCounts?.processing ?? 0, variant: 'warning' as const },
+      { label: 'Shipped', value: statusCounts?.shipped ?? 0, variant: 'default' as const },
+      { label: 'Delivered', value: statusCounts?.delivered ?? 0, variant: 'success' as const },
+      { label: 'Cancelled', value: statusCounts?.cancelled ?? 0, variant: 'error' as const },
     ];
   }, [data]);
 

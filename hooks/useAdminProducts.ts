@@ -18,13 +18,14 @@ import type {
   ProductFilters,
   ProductUpdatePayload,
 } from '@/types/product';
+import type { PaginatedResponse } from '@/types/api';
 
 export function useAdminProducts(filters: ProductFilters) {
-  return useQuery({
+  return useQuery<PaginatedResponse<Product>>({
     queryKey: ['admin', 'products', filters],
     queryFn: () => fetchAdminProducts(filters),
     staleTime: 60 * 1000,
-    keepPreviousData: true,
+    placeholderData: (previousData) => previousData,
   });
 }
 

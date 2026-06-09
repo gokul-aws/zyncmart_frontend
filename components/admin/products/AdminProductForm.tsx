@@ -44,17 +44,9 @@ function validateImageFiles(files: File[]): File[] {
   return valid;
 }
 
-const numericField = z.preprocess((v) => {
-  const n = Number(typeof v === 'string' ? v.trim() : v);
-  return Number.isNaN(n) ? undefined : n;
-}, z.number().min(0, 'Must be 0 or more'));
+const numericField = z.coerce.number().min(0, 'Must be 0 or more');
 
-const optionalNumericField = z.preprocess((v) => {
-  const s = typeof v === 'string' ? v.trim() : v;
-  if (s === '' || v === undefined) return undefined;
-  const n = Number(s);
-  return Number.isNaN(n) ? undefined : n;
-}, z.number().min(0, 'Must be 0 or more').optional());
+const optionalNumericField = z.coerce.number().min(0, 'Must be 0 or more').optional();
 
 // ─── Schema ────────────────────────────────────────────────────────────────
 
@@ -165,7 +157,7 @@ export default function AdminProductForm({
     watch,
     setValue,
     formState: { errors },
-  } = useForm<ProductFormValues>({
+  } = useForm({
     resolver: zodResolver(productSchema),
     defaultValues: {
       name: initialData?.name ?? '',

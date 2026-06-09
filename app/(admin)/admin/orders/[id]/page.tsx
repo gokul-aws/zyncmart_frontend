@@ -286,7 +286,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                   <button
                     type="button"
                     onClick={handleStatusUpdate}
-                    disabled={updateMutation.isLoading}
+                    disabled={updateMutation.isPending}
                     className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-3 text-sm font-semibold text-white hover:bg-primary-dark transition-colors disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <Check className="h-4 w-4" />
@@ -295,7 +295,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                   <button
                     type="button"
                     onClick={handleCancelOrder}
-                    disabled={!canCancel || updateMutation.isLoading}
+                    disabled={!canCancel || updateMutation.isPending}
                     className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700 hover:bg-rose-100 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <XCircle className="h-4 w-4" />
@@ -304,7 +304,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                   <button
                     type="button"
                     onClick={handleRefundOrder}
-                    disabled={!canRefund || updateMutation.isLoading}
+                    disabled={!canRefund || updateMutation.isPending}
                     className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <DollarSign className="h-4 w-4" />

@@ -120,7 +120,7 @@ export default function CustomerDetailPage({ params }: CustomerDetailPageProps) 
               <button
                 type="button"
                 onClick={handleToggleActive}
-                disabled={updateMutation.isLoading}
+                disabled={updateMutation.isPending}
                 className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition-colors disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-900"
               >
                 {user.isActive ? <UserX className="mr-2 h-4 w-4" /> : <UserCheck className="mr-2 h-4 w-4" />}

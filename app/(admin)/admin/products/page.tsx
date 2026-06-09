@@ -10,6 +10,7 @@ import EmptyState from '@/components/ui/EmptyState';
 import Badge from '@/components/ui/Badge';
 import { useAdminProducts, useBulkDeleteAdminProducts, useToggleAdminProductStatus } from '@/hooks/useAdminProducts';
 import { useCategories } from '@/hooks/useCategories';
+import type { Product } from '@/types/product';
 
 const DEFAULT_PAGE_SIZE = 12;
 
@@ -72,7 +73,7 @@ export default function ProductsPage() {
 
   const handleToggleAll = (checked: boolean) => {
     if (checked) {
-      setSelectedIds(data?.data.map((product) => product._id) ?? []);
+      setSelectedIds(data?.data.map((product: Product) => product._id) ?? []);
       return;
     }
     setSelectedIds([]);
@@ -198,7 +199,7 @@ export default function ProductsPage() {
                 <button
                   type="button"
                   onClick={handleBulkDelete}
-                  disabled={!selectedIds.length || bulkDeleteMutation.isLoading}
+                  disabled={!selectedIds.length || bulkDeleteMutation.isPending}
                   className="inline-flex items-center justify-center rounded-2xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-500 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   Delete selected

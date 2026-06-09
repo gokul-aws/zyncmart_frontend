@@ -22,11 +22,11 @@ export interface AdminUserFilters {
 }
 
 export function useAdminUsers(filters: AdminUserFilters) {
-  return useQuery({
+  return useQuery<PaginatedResponse<User>>({
     queryKey: ['admin', 'users', filters],
     queryFn: () => fetchAdminUsers(filters),
     staleTime: 60_000,
-    keepPreviousData: true,
+    placeholderData: (previousData) => previousData,
   });
 }
 

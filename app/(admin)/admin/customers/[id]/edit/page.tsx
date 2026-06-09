@@ -16,7 +16,7 @@ const updateUserSchema = z.object({
   phone: z.string().min(10, 'Enter a valid phone number').optional(),
   password: z.string().min(8, 'Password must be at least 8 characters').optional(),
   role: z.enum(['user', 'admin']),
-  isActive: z.boolean(),
+  isActive: z.preprocess((val) => val === 'true' || val === true, z.boolean()).optional(),
 });
 
 export default function EditCustomerPage({ params }: { params: { id: string } }) {
@@ -30,7 +30,7 @@ export default function EditCustomerPage({ params }: { params: { id: string } })
     handleSubmit,
     reset,
     formState: { errors, isSubmitting },
-  } = useForm<UpdateUserPayload>({
+  } = useForm({
     resolver: zodResolver(updateUserSchema),
     defaultValues: {
       name: '',
@@ -55,8 +55,8 @@ export default function EditCustomerPage({ params }: { params: { id: string } })
     }
   }, [reset, user]);
 
-  const onSubmit = async (values: UpdateUserPayload) => {
-    await updateMutation.mutateAsync({ id, payload: values });
+  const onSubmit = async (values: any) => {
+    await updateMutation.mutateAsync({ id, payload: values as UpdateUserPayload });
   };
 
   return (
@@ -153,7 +153,7 @@ export default function EditCustomerPage({ params }: { params: { id: string } })
               <label className="block">
                 <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Account status</span>
                 <select
-                  {...register('isActive', { valueAsBoolean: true })}
+                  {...register('isActive')}
                   className="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
                 >
                   <option value="true">Active</option>
@@ -171,7 +171,7 @@ export default function EditCustomerPage({ params }: { params: { id: string } })
               </Link>
               <button
                 type="submit"
-                disabled={isSubmitting || updateMutation.isLoading}
+                disabled={isSubmitting || updateMutation.isPending}
                 className="inline-flex items-center justify-center rounded-2xl bg-primary px-5 py-3 text-sm font-semibold text-white hover:bg-primary-dark transition-colors disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Save changes
