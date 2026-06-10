@@ -51,7 +51,7 @@ export default function ProductInfo({ product }: ProductInfoProps) {
   // Fire view_item GA4 event once on mount
   useEffect(() => {
     GA.viewItem(product);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product._id]);
 
   // Wishlist hydration guard (localStorage)
@@ -194,9 +194,8 @@ export default function ProductInfo({ product }: ProductInfoProps) {
           className="flex items-center justify-center w-12 rounded-xl border-2 border-gray-200 bg-white hover:border-red-300 transition-colors"
         >
           <Heart
-            className={`w-5 h-5 transition-colors ${
-              isWishlisted ? 'fill-red-500 text-red-500' : 'text-gray-400'
-            }`}
+            className={`w-5 h-5 transition-colors ${isWishlisted ? 'fill-red-500 text-red-500' : 'text-gray-400'
+              }`}
           />
         </button>
       </div>
@@ -218,7 +217,7 @@ export default function ProductInfo({ product }: ProductInfoProps) {
       </div>
 
       {/* Delivery + Pincode check */}
-      <div className="border border-gray-200 rounded-xl p-4 flex flex-col gap-3 bg-gray-50">
+      {/* <div className="border border-gray-200 rounded-xl p-4 flex flex-col gap-3 bg-gray-50">
         <div className="flex items-center gap-2 text-sm text-gray-600">
           <Truck className="w-4 h-4 text-primary shrink-0" />
           <span>Free delivery on orders above ₹999</span>
@@ -254,7 +253,7 @@ export default function ProductInfo({ product }: ProductInfoProps) {
             {pincodeMsg.text}
           </p>
         )}
-      </div>
+      </div> */}
 
       {/* Return policy */}
       <div className="flex items-center gap-2 text-sm text-gray-500">

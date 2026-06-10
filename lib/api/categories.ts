@@ -2,28 +2,54 @@ import api from './axios';
 import type { Category } from '@/types/category';
 import type { ApiResponse } from '@/types/api';
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 export async function fetchCategories(): Promise<ApiResponse<Category[]>> {
-  if (!BASE_URL) return { success: false, data: [] };
+  if (!BASE_URL && typeof window === 'undefined') {
+    return { success: false, data: [] };
+  }
 
-  const res = await fetch(`${BASE_URL}/categories`, {
+  const res = await fetch(`${BASE_URL.replace(/\/$/, '')}/categories`, {
     next: { revalidate: 3600 },
   });
 
   if (!res.ok) throw new Error(`fetchCategories failed: ${res.status}`);
-  return res.json();
+  
+  const json = await res.json();
+  
+  // Handle nested data structure: { data: { categories: [] } } vs { data: [] }
+  if (json.data && !Array.isArray(json.data) && (json.data as any).categories) {
+    return {
+      ...json,
+      data: (json.data as any).categories,
+    };
+  }
+  
+  return json;
 }
 
 export async function fetchCategory(slug: string): Promise<ApiResponse<Category>> {
-  if (!BASE_URL) return { success: false, data: null as unknown as Category };
+  if (!BASE_URL && typeof window === 'undefined') {
+    return { success: false, data: null as unknown as Category };
+  }
 
-  const res = await fetch(`${BASE_URL}/categories/${slug}`, {
+  const res = await fetch(`${BASE_URL.replace(/\/$/, '')}/categories/${slug}`, {
     next: { revalidate: 3600 },
   });
 
   if (!res.ok) throw new Error(`fetchCategory failed: ${res.status}`);
-  return res.json();
+  
+  const json = await res.json();
+  
+  // Handle nested data structure: { data: { category: {} } } vs { data: {} }
+  if (json.data && !json.data._id && (json.data as any).category) {
+    return {
+      ...json,
+      data: (json.data as any).category,
+    };
+  }
+  
+  return json;
 }
 
 export interface CreateCategoryPayload {

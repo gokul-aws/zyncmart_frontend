@@ -3,12 +3,18 @@ import type { PaginatedResponse, ApiResponse } from '@/types/api';
 import type { Review, CreateReviewPayload } from '@/types/review';
 import api from './axios';
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 export async function fetchProducts(
   filters: ProductFilters = {}
 ): Promise<PaginatedResponse<Product>> {
-  if (!BASE_URL) return { success: false, data: [], pagination: { page: 1, limit: 10, total: 0, pages: 0 } };
+  if (!BASE_URL && typeof window === 'undefined') {
+    return {
+      success: false,
+      data: [],
+      pagination: { page: 1, limit: 10, total: 0, pages: 0 },
+    };
+  }
 
   const params = new URLSearchParams();
   (Object.keys(filters) as (keyof ProductFilters)[]).forEach((key) => {
@@ -19,12 +25,24 @@ export async function fetchProducts(
   });
 
   const res = await fetch(
-    `${BASE_URL}/products${params.toString() ? `?${params}` : ''}`,
+    `${BASE_URL.replace(/\/$/, '')}/products${params.toString() ? `?${params}` : ''}`,
     { next: { revalidate: 3600 } }
   );
 
   if (!res.ok) throw new Error(`fetchProducts failed: ${res.status}`);
-  return res.json();
+  
+  const json = await res.json();
+
+  // Handle nested data structure: { data: { products: [], pagination: {} } } vs { data: [], pagination: {} }
+  if (json.data && !Array.isArray(json.data) && (json.data as any).products) {
+    return {
+      ...json,
+      data: (json.data as any).products,
+      pagination: (json.data as any).pagination || json.pagination,
+    };
+  }
+
+  return json;
 }
 
 export const fetchFeaturedProducts = () =>
@@ -37,7 +55,11 @@ export const fetchBestSellers = () =>
   fetchProducts({ sortBy: 'rating', limit: 8 });
 
 export async function fetchProduct(slug: string): Promise<Product> {
-  const res = await fetch(`${BASE_URL}/products/${slug}`, {
+  if (!BASE_URL && typeof window === 'undefined') {
+    throw new Error('API URL is not configured');
+  }
+
+  const res = await fetch(`${BASE_URL.replace(/\/$/, '')}/products/${slug}`, {
     next: { revalidate: 3600 },
   });
 
