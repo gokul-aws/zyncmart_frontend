@@ -5,7 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ExternalLink, ChevronLeft } from 'lucide-react';
+import { ExternalLink, ChevronLeft, Truck } from 'lucide-react';
 import { fetchOrderById, cancelOrder } from '@/lib/api/orders';
 import OrderTimeline from '@/components/account/OrderTimeline';
 import Badge from '@/components/ui/Badge';
@@ -38,6 +38,15 @@ export default function OrderDetailClient({ id }: Props) {
   if (isError || !order) return <p className="text-sm text-error">Order not found.</p>;
 
   const canCancel = order.status === 'placed' || order.status === 'confirmed';
+  const canTrack = order.status !== 'cancelled' && order.status !== 'returned';
+
+  const handleTrackOrder = () => {
+    if (order.tracking?.url) {
+      window.open(order.tracking.url, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    document.getElementById('order-tracking')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   return (
     <div className="space-y-6">
@@ -51,8 +60,19 @@ export default function OrderDetailClient({ id }: Props) {
         </div>
       </div>
 
+      {/* Track Order — full-width on mobile, inline on larger screens */}
+      {canTrack && (
+        <button
+          onClick={handleTrackOrder}
+          className="w-full sm:w-auto flex items-center justify-center gap-2 py-3 px-6 rounded-xl bg-primary text-white font-semibold text-sm hover:bg-primary-dark transition-colors"
+        >
+          <Truck className="w-4 h-4" />
+          Track Order
+        </button>
+      )}
+
       {/* Timeline */}
-      <div className="bg-white border border-gray-100 rounded-xl p-5">
+      <div id="order-tracking" className="bg-white border border-gray-100 rounded-xl p-5">
         <h2 className="font-semibold text-gray-800 mb-4">Status</h2>
         <OrderTimeline status={order.status} />
       </div>
@@ -70,6 +90,17 @@ export default function OrderDetailClient({ id }: Props) {
               </div>
               <div className="flex-1">
                 <p className="text-sm font-medium text-gray-900">{item.name}</p>
+                {item.color && (
+                  <p className="flex items-center gap-1.5 text-xs text-gray-500">
+                    {item.colorCode && (
+                      <span
+                        className="h-3 w-3 rounded-full border border-black/10 shrink-0"
+                        style={{ backgroundColor: item.colorCode }}
+                      />
+                    )}
+                    {item.color}
+                  </p>
+                )}
                 {item.variant && <p className="text-xs text-gray-500">{item.variant}</p>}
                 <p className="text-sm text-gray-600 mt-0.5">
                   {formatPrice(item.price)} × {item.quantity}

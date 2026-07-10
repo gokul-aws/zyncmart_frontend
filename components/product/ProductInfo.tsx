@@ -19,28 +19,42 @@ import {
 import StarRating from '@/components/ui/StarRating';
 import PriceDisplay from '@/components/ui/PriceDisplay';
 import ProductVariants from './ProductVariants';
+import ProductColorSelector from './ProductColorSelector';
 import QuantitySelector from '@/components/ui/QuantitySelector';
 import ProductShare from './ProductShare';
 import { useCartStore } from '@/lib/store/cartStore';
 import { useWishlistStore } from '@/lib/store/wishlistStore';
 import { GA } from '@/lib/analytics';
-import type { Product } from '@/types/product';
+import type { Product, ColorVariant } from '@/types/product';
 
 const WHATSAPP = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER;
 
 interface ProductInfoProps {
   product: Product;
+  selectedColorVariant?: ColorVariant | null;
+  onColorChange?: (variant: ColorVariant) => void;
 }
 
-export default function ProductInfo({ product }: ProductInfoProps) {
+export default function ProductInfo({
+  product,
+  selectedColorVariant = null,
+  onColorChange,
+}: ProductInfoProps) {
   const router = useRouter();
   const { addItem, toggleDrawer } = useCartStore();
   const { hasItem, toggleItem } = useWishlistStore();
 
-  const primaryImage =
-    product.images.find((i) => i.isPrimary) ?? product.images[0];
+  // Resolved from the selected color variant, falling back to the product's
+  // own fields for legacy products with no color variants.
+  const activeImages = selectedColorVariant?.images?.length
+    ? selectedColorVariant.images
+    : product.images;
+  const primaryImage = activeImages.find((i) => i.isPrimary) ?? activeImages[0];
+  const activePrice = selectedColorVariant?.price ?? product.price;
+  const activeStock = selectedColorVariant ? selectedColorVariant.stock : product.stock;
+  const activeSku = selectedColorVariant?.sku ?? product.sku;
 
-  // Variant state: default to first option of each variant
+  // Variant state: default to first option of each (non-color) variant group
   const [selected, setSelected] = useState<Record<string, string>>(() =>
     Object.fromEntries(product.variants.map((v) => [v.name, v.options[0] ?? '']))
   );
@@ -51,7 +65,7 @@ export default function ProductInfo({ product }: ProductInfoProps) {
   // Fire view_item GA4 event once on mount
   useEffect(() => {
     GA.viewItem(product);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product._id]);
 
   // Wishlist hydration guard (localStorage)
@@ -59,8 +73,14 @@ export default function ProductInfo({ product }: ProductInfoProps) {
   useEffect(() => setMounted(true), []);
   const isWishlisted = mounted && hasItem(product._id);
 
-  const outOfStock = product.stock === 0;
-  const lowStock = !outOfStock && product.stock <= product.lowStockThreshold;
+  // Reset quantity when switching colors so a stale quantity can't exceed
+  // the newly selected color's stock.
+  useEffect(() => {
+    setQuantity(1);
+  }, [selectedColorVariant?._id]);
+
+  const outOfStock = activeStock === 0;
+  const lowStock = !outOfStock && activeStock <= product.lowStockThreshold;
   const variantLabel =
     Object.values(selected).filter(Boolean).join(' / ') || undefined;
 
@@ -68,12 +88,16 @@ export default function ProductInfo({ product }: ProductInfoProps) {
     productId: product._id,
     name: product.name,
     image: primaryImage?.url ?? '',
-    price: product.price,
+    price: activePrice,
     comparePrice: product.comparePrice,
-    stock: product.stock,
+    stock: activeStock,
     quantity,
     variant: variantLabel,
     slug: product.slug,
+    variantId: selectedColorVariant?._id,
+    color: selectedColorVariant?.color,
+    colorCode: selectedColorVariant?.colorCode,
+    sku: activeSku,
   });
 
   const handleAddToCart = () => {
@@ -125,7 +149,7 @@ export default function ProductInfo({ product }: ProductInfoProps) {
       </div>
 
       {/* Product name */}
-      <h1 className="text-2xl md:text-3xl font-bold text-gray-900 leading-snug font-display">
+      <h1 className="text-2xl md:text-3xl font-bold text-gray-900 leading-snug tracking-tight font-display">
         {product.name}
       </h1>
 
@@ -139,7 +163,7 @@ export default function ProductInfo({ product }: ProductInfoProps) {
       )}
 
       {/* Price */}
-      <PriceDisplay price={product.price} comparePrice={product.comparePrice} size="lg" />
+      <PriceDisplay price={activePrice} comparePrice={product.comparePrice} size="lg" />
 
       {/* Stock badge */}
       <div>
@@ -149,7 +173,7 @@ export default function ProductInfo({ product }: ProductInfoProps) {
           </span>
         ) : lowStock ? (
           <span className="inline-block px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-            Only {product.stock} left
+            Only {activeStock} left
           </span>
         ) : (
           <span className="inline-block px-2.5 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200">
@@ -160,6 +184,15 @@ export default function ProductInfo({ product }: ProductInfoProps) {
 
       {/* Short description */}
       <p className="text-gray-600 text-sm leading-relaxed">{product.shortDescription}</p>
+
+      {/* Color variants */}
+      {(product.colorVariants?.length ?? 0) > 0 && onColorChange && (
+        <ProductColorSelector
+          colorVariants={product.colorVariants}
+          selected={selectedColorVariant}
+          onChange={onColorChange}
+        />
+      )}
 
       {/* Variants */}
       {product.variants.length > 0 && (
@@ -174,7 +207,7 @@ export default function ProductInfo({ product }: ProductInfoProps) {
       {!outOfStock && (
         <div className="flex items-center gap-3">
           <span className="text-sm font-medium text-gray-700">Qty:</span>
-          <QuantitySelector quantity={quantity} max={product.stock} onChange={setQuantity} />
+          <QuantitySelector quantity={quantity} max={activeStock} onChange={setQuantity} />
         </div>
       )}
 
@@ -194,8 +227,9 @@ export default function ProductInfo({ product }: ProductInfoProps) {
           className="flex items-center justify-center w-12 rounded-xl border-2 border-gray-200 bg-white hover:border-red-300 transition-colors"
         >
           <Heart
-            className={`w-5 h-5 transition-colors ${isWishlisted ? 'fill-red-500 text-red-500' : 'text-gray-400'
-              }`}
+            className={`w-5 h-5 transition-colors ${
+              isWishlisted ? 'fill-red-500 text-red-500' : 'text-gray-400'
+            }`}
           />
         </button>
       </div>
@@ -217,7 +251,7 @@ export default function ProductInfo({ product }: ProductInfoProps) {
       </div>
 
       {/* Delivery + Pincode check */}
-      {/* <div className="border border-gray-200 rounded-xl p-4 flex flex-col gap-3 bg-gray-50">
+      <div className="border border-gray-200 rounded-xl p-4 flex flex-col gap-3 bg-gray-50">
         <div className="flex items-center gap-2 text-sm text-gray-600">
           <Truck className="w-4 h-4 text-primary shrink-0" />
           <span>Free delivery on orders above ₹999</span>
@@ -253,7 +287,7 @@ export default function ProductInfo({ product }: ProductInfoProps) {
             {pincodeMsg.text}
           </p>
         )}
-      </div> */}
+      </div>
 
       {/* Return policy */}
       <div className="flex items-center gap-2 text-sm text-gray-500">
@@ -263,7 +297,7 @@ export default function ProductInfo({ product }: ProductInfoProps) {
 
       {/* SKU + Share */}
       <div className="pt-4 border-t border-gray-100 flex flex-col gap-4">
-        <span className="text-xs text-gray-400">SKU: {product.sku}</span>
+        <span className="text-xs text-gray-400">SKU: {activeSku}</span>
         <ProductShare product={product} />
       </div>
     </div>

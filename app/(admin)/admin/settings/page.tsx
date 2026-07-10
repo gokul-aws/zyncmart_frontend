@@ -16,7 +16,7 @@ export default function AdminSettingsPage() {
 
   const memoizedSettings = useMemo(() => settings, [settings]);
 
-  if (isLoading || !settings) {
+  if (isLoading) {
     return (
       <AdminPageShell title="Store settings" description="Manage store configuration, payments, shipping, taxes, notifications, and profile settings.">
         <div className="space-y-4">
@@ -31,7 +31,7 @@ export default function AdminSettingsPage() {
     );
   }
 
-  if (isError) {
+  if (isError || !settings) {
     return (
       <AdminPageShell title="Store settings" description="Manage store configuration, payments, shipping, taxes, notifications, and profile settings.">
         <EmptyState
@@ -51,8 +51,8 @@ export default function AdminSettingsPage() {
         </div>
 
         <AdminSettingsForm
-          settings={settings}
-          saving={updateSettingsMutation.isPending}
+          settings={memoizedSettings}
+          saving={updateSettingsMutation.isLoading}
           onSubmit={(payload) => updateSettingsMutation.mutate(payload)}
         />
       </div>

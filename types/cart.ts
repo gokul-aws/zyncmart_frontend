@@ -8,6 +8,11 @@ export interface CartItem {
   quantity: number;
   variant?: string;
   slug: string;
+  // Color variant reference, alongside the generic `variant` label above.
+  variantId?: string;
+  color?: string;
+  colorCode?: string;
+  sku?: string;
 }
 
 export interface CartSummary {

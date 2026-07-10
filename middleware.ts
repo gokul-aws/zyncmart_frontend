@@ -22,7 +22,13 @@ export function middleware(request: NextRequest) {
   const isProtectedRoute = PROTECTED.some((p) => pathname.startsWith(p)) || isAdminProtectedRoute;
 
   if (isProtectedRoute && !hasAuth) {
-    const redirectUrl = pathname.startsWith('/admin') ? '/admin/login' : '/login';
+    // TODO: Admin Sign In is temporarily disabled as a separate UI entry point.
+    // Everyone (customer or admin) now authenticates through the unified
+    // /login page; useAuth.signIn() redirects admins to /admin/dashboard
+    // after checking their role. The /admin/login route/page itself is left
+    // in the codebase, just unreachable via app navigation or this redirect.
+    // const redirectUrl = pathname.startsWith('/admin') ? '/admin/login' : '/login';
+    const redirectUrl = '/login';
     const loginUrl = new URL(redirectUrl, request.url);
     loginUrl.searchParams.set('redirect', pathname);
     return NextResponse.redirect(loginUrl);

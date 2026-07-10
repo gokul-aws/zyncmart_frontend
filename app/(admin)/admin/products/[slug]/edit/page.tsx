@@ -4,6 +4,7 @@ import { use } from 'react';
 import AdminPageShell from '@/components/admin/AdminPageShell';
 import AdminProductForm from '@/components/admin/products/AdminProductForm';
 import AdminProductImageManager from '@/components/admin/products/AdminProductImageManager';
+import AdminProductVariantImageManager from '@/components/admin/products/AdminProductVariantImageManager';
 import { useAdminProduct, useUpdateAdminProduct } from '@/hooks/useAdminProducts';
 import type { ProductCreatePayload } from '@/types/product';
 
@@ -11,12 +12,23 @@ interface EditProductPageProps {
   params: Promise<{ slug: string }>;
 }
 
+// TODO: Product Images upload section temporarily disabled — images are now
+// managed per color variant instead (see AdminProductVariantImageManager
+// below). Flip back to `true` to restore. (Typed as `boolean`, not a literal
+// `false`, so TS doesn't treat the guarded JSX as unreachable and widen
+// narrowing inside it.)
+const SHOW_LEGACY_PRODUCT_IMAGES: boolean = false;
+
 export default function AdminProductEditPage({ params }: EditProductPageProps) {
   const { slug } = use(params);
   const { data: product, isLoading, isError } = useAdminProduct(slug);
   const updateMutation = useUpdateAdminProduct();
 
-  const handleSubmit = async (payload: ProductCreatePayload, _imageFiles: File[]) => {
+  const handleSubmit = async (
+    payload: ProductCreatePayload,
+    _imageFiles: File[],
+    _variantImageFiles: File[][]
+  ) => {
     if (!product) return;
     await updateMutation.mutateAsync({ id: product._id, payload });
   };
@@ -50,12 +62,35 @@ export default function AdminProductEditPage({ params }: EditProductPageProps) {
       description="Update product details, pricing, and metadata for this listing."
     >
       <div className="space-y-6">
-        {/* Images */}
-        <AdminProductImageManager
-          productId={product._id}
-          productSlug={product.slug}
-          images={product.images}
-        />
+        {SHOW_LEGACY_PRODUCT_IMAGES && (
+          <AdminProductImageManager
+            productId={product._id}
+            productSlug={product.slug}
+            images={product.images}
+          />
+        )}
+
+        {/* Per-color-variant images */}
+        {(product.colorVariants?.length ?? 0) > 0 && (
+          <div className="space-y-4">
+            <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+              Color variant images
+            </h2>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {product.colorVariants.map((variant) => (
+                <AdminProductVariantImageManager
+                  key={variant._id}
+                  productId={product._id}
+                  productSlug={product.slug}
+                  variantId={variant._id as string}
+                  color={variant.color}
+                  colorCode={variant.colorCode}
+                  images={variant.images}
+                />
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Form */}
         <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900">

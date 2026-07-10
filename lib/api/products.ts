@@ -3,18 +3,12 @@ import type { PaginatedResponse, ApiResponse } from '@/types/api';
 import type { Review, CreateReviewPayload } from '@/types/review';
 import api from './axios';
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 
 export async function fetchProducts(
   filters: ProductFilters = {}
 ): Promise<PaginatedResponse<Product>> {
-  if (!BASE_URL && typeof window === 'undefined') {
-    return {
-      success: false,
-      data: [],
-      pagination: { page: 1, limit: 10, total: 0, pages: 0 },
-    };
-  }
+  if (!BASE_URL) return { success: false, data: [], pagination: { page: 1, limit: 10, total: 0, pages: 0 } };
 
   const params = new URLSearchParams();
   (Object.keys(filters) as (keyof ProductFilters)[]).forEach((key) => {
@@ -25,24 +19,12 @@ export async function fetchProducts(
   });
 
   const res = await fetch(
-    `${BASE_URL.replace(/\/$/, '')}/products${params.toString() ? `?${params}` : ''}`,
+    `${BASE_URL}/products${params.toString() ? `?${params}` : ''}`,
     { next: { revalidate: 3600 } }
   );
 
   if (!res.ok) throw new Error(`fetchProducts failed: ${res.status}`);
-  
-  const json = await res.json();
-
-  // Handle nested data structure: { data: { products: [], pagination: {} } } vs { data: [], pagination: {} }
-  if (json.data && !Array.isArray(json.data) && (json.data as any).products) {
-    return {
-      ...json,
-      data: (json.data as any).products,
-      pagination: (json.data as any).pagination || json.pagination,
-    };
-  }
-
-  return json;
+  return res.json();
 }
 
 export const fetchFeaturedProducts = () =>
@@ -55,11 +37,7 @@ export const fetchBestSellers = () =>
   fetchProducts({ sortBy: 'rating', limit: 8 });
 
 export async function fetchProduct(slug: string): Promise<Product> {
-  if (!BASE_URL && typeof window === 'undefined') {
-    throw new Error('API URL is not configured');
-  }
-
-  const res = await fetch(`${BASE_URL.replace(/\/$/, '')}/products/${slug}`, {
+  const res = await fetch(`${BASE_URL}/products/${slug}`, {
     next: { revalidate: 3600 },
   });
 
@@ -72,7 +50,10 @@ export async function fetchProduct(slug: string): Promise<Product> {
 export async function fetchAdminProducts(
   filters: ProductFilters = {}
 ): Promise<PaginatedResponse<Product>> {
-  const { data } = await api.get<PaginatedResponse<Product>>('/products', {
+  // Dedicated admin endpoint — unlike the public GET /products, this doesn't
+  // force isActive=true, so the Status filter (and inactive/deleted
+  // products) actually work in the admin listing.
+  const { data } = await api.get<PaginatedResponse<Product>>('/admin/products', {
     params: filters,
   });
   return data;
@@ -128,6 +109,42 @@ export async function removeProductImage(
 ): Promise<void> {
   const { data } = await api.delete<ApiResponse<void>>(
     `/products/${productId}/images/${encodeURIComponent(publicId)}`
+  );
+  return data.data;
+}
+
+export async function uploadVariantImages(
+  productId: string,
+  variantId: string,
+  files: File[],
+  onProgress?: (percent: number) => void
+): Promise<void> {
+  const formData = new FormData();
+  files.forEach((file) => formData.append('images', file));
+
+  const { data } = await api.post<ApiResponse<void>>(
+    `/products/${productId}/variants/${variantId}/images`,
+    formData,
+    {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress: (event) => {
+        if (onProgress && event.total) {
+          onProgress(Math.round((event.loaded * 100) / event.total));
+        }
+      },
+    }
+  );
+
+  return data.data;
+}
+
+export async function removeVariantImage(
+  productId: string,
+  variantId: string,
+  publicId: string
+): Promise<void> {
+  const { data } = await api.delete<ApiResponse<void>>(
+    `/products/${productId}/variants/${variantId}/images/${encodeURIComponent(publicId)}`
   );
   return data.data;
 }

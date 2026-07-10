@@ -27,20 +27,20 @@ export default function AdminProfileMenu() {
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white p-1 sm:px-3 sm:py-2 text-sm font-medium text-slate-700 shadow-sm hover:border-slate-300 hover:bg-slate-50 transition-colors dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:hover:bg-slate-900"
+        className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:border-slate-300 hover:bg-slate-50 transition-colors dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:hover:bg-slate-900"
       >
-        <span className="inline-flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-full bg-primary text-white font-semibold uppercase text-xs sm:text-base">
+        <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-primary text-white font-semibold uppercase">
           {user?.name?.charAt(0) ?? 'A'}
         </span>
         <span className="hidden sm:block text-left">
-          <span className="block text-sm font-semibold truncate max-w-[100px]">{user?.name ?? 'Admin'}</span>
+          <span className="block text-sm font-semibold">{user?.name ?? 'Admin'}</span>
           <span className="block text-xs text-slate-500 dark:text-slate-400">{user?.role ?? 'Administrator'}</span>
         </span>
-        <ChevronDown className="h-4 w-4 text-slate-500 dark:text-slate-400 mr-1 sm:mr-0" />
+        <ChevronDown className="h-4 w-4 text-slate-500 dark:text-slate-400" />
       </button>
 
       {open && (
-        <div className="absolute right-0 z-20 mt-2 w-56 rounded-3xl border border-slate-200 bg-white py-3 shadow-xl shadow-slate-900/10 dark:border-slate-700 dark:bg-slate-950 animate-in fade-in slide-in-from-top-2 duration-200">
+        <div className="absolute right-0 z-20 mt-2 w-56 rounded-3xl border border-slate-200 bg-white py-3 shadow-xl shadow-slate-900/10 dark:border-slate-700 dark:bg-slate-950">
           <div className="px-4 py-3 border-b border-slate-200/80 dark:border-slate-700/80">
             <p className="text-sm font-semibold text-slate-900 dark:text-white">{user?.name ?? 'Admin'}</p>
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{user?.email ?? 'admin@example.com'}</p>

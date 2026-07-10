@@ -19,6 +19,10 @@ export interface OrderItem {
   price: number;
   quantity: number;
   variant?: string;
+  variantId?: string;
+  color?: string;
+  colorCode?: string;
+  sku?: string;
 }
 
 export interface Order {

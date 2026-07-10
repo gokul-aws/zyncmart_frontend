@@ -24,9 +24,24 @@ export async function login(payload: LoginPayload): Promise<AuthResponse> {
   return data.data as AuthResponse;
 }
 
-export async function register(payload: RegisterPayload): Promise<AuthResponse> {
+export interface RegisterOtpResponse {
+  email: string;
+}
+
+// Registration is two-step: this only sends an OTP to the email — the
+// account isn't created until verifyRegistrationOtp succeeds.
+export async function register(payload: RegisterPayload): Promise<RegisterOtpResponse> {
   const { data } = await api.post('/auth/register', payload);
+  return data.data as RegisterOtpResponse;
+}
+
+export async function verifyRegistrationOtp(email: string, otp: string): Promise<AuthResponse> {
+  const { data } = await api.post('/auth/register/verify-otp', { email, otp });
   return data.data as AuthResponse;
+}
+
+export async function resendRegistrationOtp(email: string): Promise<void> {
+  await api.post('/auth/register/resend-otp', { email });
 }
 
 export async function logout(): Promise<void> {
@@ -37,8 +52,8 @@ export async function forgotPassword(email: string): Promise<void> {
   await api.post('/auth/forgot-password', { email });
 }
 
-export async function resetPassword(token: string, password: string): Promise<void> {
-  await api.post('/auth/reset-password', { token, password });
+export async function resetPassword(email: string, otp: string, password: string): Promise<void> {
+  await api.post('/auth/reset-password', { email, otp, password });
 }
 
 export async function fetchMe(): Promise<User> {

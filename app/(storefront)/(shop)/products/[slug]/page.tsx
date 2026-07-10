@@ -4,8 +4,7 @@ import Link from 'next/link';
 import { fetchProduct, fetchProducts } from '@/lib/api/products';
 import { buildProductMetadata, buildProductJsonLd, buildBreadcrumbJsonLd } from '@/lib/seo';
 import type { Product } from '@/types/product';
-import ProductImageGallery from '@/components/product/ProductImageGallery';
-import ProductInfo from '@/components/product/ProductInfo';
+import ProductPurchasePanel from '@/components/product/ProductPurchasePanel';
 import ProductTabs from '@/components/product/ProductTabs';
 import RelatedProducts from '@/components/product/RelatedProducts';
 
@@ -99,16 +98,8 @@ export default async function ProductDetailPage({ params }: { params: Params }) 
           </ol>
         </nav>
 
-        {/* Product hero: gallery + info */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12 mb-12">
-          {/* Gallery */}
-          <div className="md:sticky md:top-24 self-start">
-            <ProductImageGallery images={product.images} productName={product.name} />
-          </div>
-
-          {/* Info */}
-          <ProductInfo product={product} />
-        </div>
+        {/* Product hero: gallery + info (color-variant-aware) */}
+        <ProductPurchasePanel product={product} />
 
         {/* Tabs: Description | Specifications | Reviews */}
         <div className="mb-12">

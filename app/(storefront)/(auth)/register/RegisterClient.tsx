@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -22,8 +23,17 @@ const schema = z
 
 type FormData = z.infer<typeof schema>;
 
+const otpSchema = z.object({
+  otp: z.string().regex(/^\d{6}$/, 'Enter the 6-digit code'),
+});
+
+type OtpFormData = z.infer<typeof otpSchema>;
+
 export default function RegisterClient() {
-  const { signUp, loading, error } = useAuth();
+  const { signUp, verifyOtp, resendOtp, loading, error } = useAuth();
+  const [pendingEmail, setPendingEmail] = useState<string | null>(null);
+  const [resending, setResending] = useState(false);
+  const [resendMessage, setResendMessage] = useState<string | null>(null);
 
   const {
     register,
@@ -31,9 +41,113 @@ export default function RegisterClient() {
     formState: { errors },
   } = useForm<FormData>({ resolver: zodResolver(schema) });
 
-  const onSubmit = (data: FormData) => {
-    signUp({ name: data.name, email: data.email, phone: data.phone, password: data.password });
+  const {
+    register: registerOtp,
+    handleSubmit: handleOtpSubmit,
+    formState: { errors: otpErrors },
+  } = useForm<OtpFormData>({ resolver: zodResolver(otpSchema) });
+
+  const onSubmit = async (data: FormData) => {
+    const email = await signUp({
+      name: data.name,
+      email: data.email,
+      phone: data.phone,
+      password: data.password,
+    });
+    if (email) setPendingEmail(email);
   };
+
+  const onVerifyOtp = async (data: OtpFormData) => {
+    if (!pendingEmail) return;
+    await verifyOtp(pendingEmail, data.otp);
+  };
+
+  const handleResend = async () => {
+    if (!pendingEmail) return;
+    setResending(true);
+    setResendMessage(null);
+    const ok = await resendOtp(pendingEmail);
+    setResending(false);
+    if (ok) setResendMessage('A new code has been sent to your email.');
+  };
+
+  if (pendingEmail) {
+    return (
+      <div className="min-h-[80vh] flex items-center justify-center px-4 py-12">
+        <div className="w-full max-w-md">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
+            <h1 className="text-2xl font-bold text-gray-900 mb-1">Verify your email</h1>
+            <p className="text-sm text-gray-500 mb-6">
+              We&apos;ve sent a 6-digit code to{' '}
+              <span className="font-medium text-gray-700">{pendingEmail}</span>. Enter it below to
+              finish creating your account.
+            </p>
+
+            {error && (
+              <div className="mb-4 px-4 py-3 bg-red-50 border border-red-100 rounded-lg text-sm text-error whitespace-pre-line">
+                {error}
+              </div>
+            )}
+            {resendMessage && (
+              <div className="mb-4 px-4 py-3 bg-green-50 border border-green-100 rounded-lg text-sm text-green-700">
+                {resendMessage}
+              </div>
+            )}
+
+            <form onSubmit={handleOtpSubmit(onVerifyOtp)} className="space-y-4" noValidate>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Verification code
+                </label>
+                <input
+                  {...registerOtp('otp')}
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  autoComplete="one-time-code"
+                  placeholder="123456"
+                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm tracking-[0.3em] text-center focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                />
+                {otpErrors.otp && (
+                  <p className="mt-1 text-xs text-error">{otpErrors.otp.message}</p>
+                )}
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3 bg-primary text-white font-semibold rounded-xl hover:bg-primary-dark transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {loading ? 'Verifying…' : 'Verify & Create Account'}
+              </button>
+            </form>
+
+            <p className="mt-6 text-center text-sm text-gray-500">
+              Didn&apos;t get the code?{' '}
+              <button
+                type="button"
+                onClick={handleResend}
+                disabled={resending}
+                className="font-medium text-primary hover:underline disabled:opacity-60"
+              >
+                {resending ? 'Resending…' : 'Resend code'}
+              </button>
+            </p>
+
+            <p className="mt-2 text-center text-sm text-gray-500">
+              <button
+                type="button"
+                onClick={() => setPendingEmail(null)}
+                className="font-medium text-gray-600 hover:underline"
+              >
+                Use a different email
+              </button>
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-[80vh] flex items-center justify-center px-4 py-12">
@@ -43,7 +157,7 @@ export default function RegisterClient() {
           <p className="text-sm text-gray-500 mb-6">Start shopping in seconds</p>
 
           {error && (
-            <div className="mb-4 px-4 py-3 bg-red-50 border border-red-100 rounded-lg text-sm text-error">
+            <div className="mb-4 px-4 py-3 bg-red-50 border border-red-100 rounded-lg text-sm text-error whitespace-pre-line">
               {error}
             </div>
           )}
@@ -94,7 +208,7 @@ export default function RegisterClient() {
               disabled={loading}
               className="w-full py-3 bg-primary text-white font-semibold rounded-xl hover:bg-primary-dark transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {loading ? 'Creating account…' : 'Create Account'}
+              {loading ? 'Sending code…' : 'Create Account'}
             </button>
           </form>
 

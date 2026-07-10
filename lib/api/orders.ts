@@ -104,6 +104,7 @@ export interface CreateOrderPayload {
     price: number;
     quantity: number;
     variant?: string;
+    variantId?: string;
   }[];
   shippingAddress: Address;
   paymentMethod: 'razorpay' | 'cod';
@@ -136,5 +137,6 @@ export function cartItemsToOrderItems(
     price: i.price,
     quantity: i.quantity,
     variant: i.variant,
+    variantId: i.variantId,
   }));
 }

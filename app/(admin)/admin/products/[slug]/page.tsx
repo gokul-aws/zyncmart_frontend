@@ -6,11 +6,18 @@ import { ArrowLeft, Pencil, Trash2 } from 'lucide-react';
 import { useAdminProduct, useDeleteAdminProduct, useToggleAdminProductStatus } from '@/hooks/useAdminProducts';
 import AdminPageShell from '@/components/admin/AdminPageShell';
 import AdminProductImageManager from '@/components/admin/products/AdminProductImageManager';
+import AdminProductVariantImageManager from '@/components/admin/products/AdminProductVariantImageManager';
 import Badge from '@/components/ui/Badge';
 
 interface ProductPageProps {
   params: Promise<{ slug: string }>;
 }
+
+// TODO: Product Images upload section temporarily disabled — images are now
+// managed per color variant instead (see AdminProductVariantImageManager
+// below). Flip back to `true` to restore. (Typed as `boolean`, not a literal
+// `false`, so TS doesn't treat the guarded JSX as unreachable.)
+const SHOW_LEGACY_PRODUCT_IMAGES: boolean = false;
 
 export default function AdminProductDetailsPage({ params }: ProductPageProps) {
   const { slug } = use(params);
@@ -56,6 +63,10 @@ export default function AdminProductDetailsPage({ params }: ProductPageProps) {
       </div>
     );
   }
+
+  // Products created before colorVariants existed (or not yet migrated) may
+  // not have this field populated.
+  const colorVariants = product.colorVariants ?? [];
 
   return (
     <AdminPageShell
@@ -125,7 +136,38 @@ export default function AdminProductDetailsPage({ params }: ProductPageProps) {
           <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">Variants</p>
+                <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">Color variants</p>
+              </div>
+              <div className="text-sm text-slate-500 dark:text-slate-400">{colorVariants.length} defined</div>
+            </div>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              {colorVariants.map((variant) => (
+                <div key={variant._id} className="flex items-start gap-3 rounded-3xl border border-slate-100 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
+                  {variant.colorCode && (
+                    <span
+                      className="mt-0.5 h-6 w-6 flex-shrink-0 rounded-full border border-slate-200 dark:border-slate-700"
+                      style={{ backgroundColor: variant.colorCode }}
+                    />
+                  )}
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900 dark:text-white">{variant.color}</p>
+                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">SKU: {variant.sku}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Stock: {variant.stock}</p>
+                    {variant.price !== undefined && (
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Price: ₹{variant.price.toLocaleString()}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">Options</p>
               </div>
               <div className="text-sm text-slate-500 dark:text-slate-400">{product.variants.length} defined</div>
             </div>
@@ -166,11 +208,25 @@ export default function AdminProductDetailsPage({ params }: ProductPageProps) {
             </div>
           </div>
 
-          <AdminProductImageManager
-            productId={product._id}
-            productSlug={product.slug}
-            images={product.images}
-          />
+          {SHOW_LEGACY_PRODUCT_IMAGES && (
+            <AdminProductImageManager
+              productId={product._id}
+              productSlug={product.slug}
+              images={product.images}
+            />
+          )}
+
+          {colorVariants.map((variant) => (
+            <AdminProductVariantImageManager
+              key={variant._id}
+              productId={product._id}
+              productSlug={product.slug}
+              variantId={variant._id as string}
+              color={variant.color}
+              colorCode={variant.colorCode}
+              images={variant.images}
+            />
+          ))}
 
           <div className="rounded-3xl border border-rose-200 bg-rose-50 p-6 text-rose-700 shadow-sm dark:border-rose-600/40 dark:bg-rose-950/20 dark:text-rose-200">
             <p className="font-semibold">Danger zone</p>

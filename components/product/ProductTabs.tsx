@@ -50,7 +50,7 @@ export default function ProductTabs({ product }: ProductTabsProps) {
       {/* Content */}
       <div className="py-6">
         {active === 'description' && (
-          <div className="text-gray-700 text-sm leading-relaxed max-w-3xl whitespace-pre-wrap">
+          <div className="text-gray-700 text-base leading-7 max-w-3xl whitespace-pre-wrap">
             {product.description}
           </div>
         )}

@@ -28,14 +28,21 @@ export default function DashboardPage() {
   const { data, isLoading, isError, refetch } = useDashboardStats();
 
   const statusSummary = useMemo(() => {
-    const statusCounts = data?.orderStatusCounts;
+    const statusCounts = data?.orderStatusCounts ?? {};
     return [
-      { label: 'Placed', value: statusCounts?.placed ?? 0, variant: 'warning' as const },
-      { label: 'Processing', value: statusCounts?.processing ?? 0, variant: 'warning' as const },
-      { label: 'Shipped', value: statusCounts?.shipped ?? 0, variant: 'default' as const },
-      { label: 'Delivered', value: statusCounts?.delivered ?? 0, variant: 'success' as const },
-      { label: 'Cancelled', value: statusCounts?.cancelled ?? 0, variant: 'error' as const },
+      { label: 'Placed', value: statusCounts.placed ?? 0, variant: 'warning' as const },
+      { label: 'Processing', value: statusCounts.processing ?? 0, variant: 'warning' as const },
+      { label: 'Shipped', value: statusCounts.shipped ?? 0, variant: 'default' as const },
+      { label: 'Delivered', value: statusCounts.delivered ?? 0, variant: 'success' as const },
+      { label: 'Cancelled', value: statusCounts.cancelled ?? 0, variant: 'error' as const },
     ];
+  }, [data]);
+
+  const revenueChartData = useMemo(() => {
+    return data?.revenue?.last7Days?.map((day: any) => ({
+      label: day.date,
+      value: day.revenue
+    })) ?? [];
   }, [data]);
 
   return (
@@ -61,38 +68,38 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[repeat(3,1fr)] xl:grid-rows-[auto_minmax(0,1fr)]">
+      <div className="grid gap-4 xl:grid-cols-[repeat(3,1fr)] xl:grid-rows-[auto_minmax(0,1fr)]">
         {metricCards.map((card) => (
           <div
             key={card.key}
-            className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900"
+            className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900"
           >
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-xs sm:text-sm uppercase tracking-[0.2em] sm:tracking-[0.24em] text-slate-500 dark:text-slate-400">{card.label}</p>
-                <p className="mt-2 sm:mt-3 text-2xl sm:text-3xl font-semibold text-slate-900 dark:text-white">
-                  {isLoading ? 'Loading…' : renderMetricValue(card.key, data)}
+                <p className="text-sm uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">{card.label}</p>
+                <p className="mt-3 text-3xl font-semibold text-slate-900 dark:text-white">
+                  {isLoading ? 'Loading…' : renderMetricValue(card.key, data?.stats)}
                 </p>
               </div>
-              <div className={`rounded-3xl px-2.5 py-1.5 sm:px-3 sm:py-2 text-[10px] sm:text-xs font-semibold ${card.color}`}>
+              <div className={`rounded-3xl px-3 py-2 text-xs font-semibold ${card.color}`}>
                 {card.label === 'Pending orders' ? 'Action' : 'Summary'}
               </div>
             </div>
           </div>
         ))}
 
-        <div className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900 md:col-span-2 xl:col-span-2">
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900 xl:col-span-2">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-semibold text-slate-900 dark:text-white">Order status</p>
               <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">A quick look at the current order pipeline.</p>
             </div>
           </div>
-          <div className="mt-6 grid gap-3 grid-cols-2 sm:grid-cols-3 xl:grid-cols-5">
+          <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             {statusSummary.map((item) => (
-              <div key={item.label} className="rounded-3xl bg-slate-50 p-3 sm:p-4 dark:bg-slate-950">
-                <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">{item.label}</p>
-                <p className="mt-1.5 sm:mt-2 text-xl sm:text-2xl font-semibold text-slate-900 dark:text-white">{isLoading ? '—' : item.value}</p>
+              <div key={item.label} className="rounded-3xl bg-slate-50 p-4 dark:bg-slate-950">
+                <p className="text-xs uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">{item.label}</p>
+                <p className="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">{isLoading ? '—' : item.value}</p>
               </div>
             ))}
           </div>
@@ -101,7 +108,7 @@ export default function DashboardPage() {
 
       <div className="grid gap-6 xl:grid-cols-[2fr_1fr]">
         <div className="space-y-6">
-          <AdminRevenueChart data={data?.revenueAnalytics ?? []} />
+          <AdminRevenueChart data={revenueChartData} />
           <AdminRecentOrdersTable recentOrders={data?.recentOrders ?? []} />
         </div>
 

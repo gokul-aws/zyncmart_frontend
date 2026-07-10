@@ -9,15 +9,22 @@ interface CartStore {
   items: CartItem[];
   isOpen: boolean;
   addItem: (item: CartItem) => void;
-  removeItem: (productId: string, variant?: string) => void;
-  updateQuantity: (productId: string, quantity: number, variant?: string) => void;
+  removeItem: (productId: string, variant?: string, variantId?: string) => void;
+  updateQuantity: (productId: string, quantity: number, variant?: string, variantId?: string) => void;
   clearCart: () => void;
   toggleDrawer: () => void;
   getSummary: () => CartSummary;
 }
 
-const matchItem = (a: CartItem, productId: string, variant?: string) =>
-  a.productId === productId && a.variant === variant;
+// A cart line's identity beyond productId: prefer the color variant's id when
+// either side has one (so two colors of the same product stay distinct
+// lines), otherwise fall back to the free-text variant label for legacy
+// items with only a generic option selected (e.g. Size).
+const lineIdentity = (item: Pick<CartItem, 'variant' | 'variantId'>) =>
+  item.variantId ?? item.variant ?? '';
+
+const matchItem = (a: CartItem, productId: string, variant?: string, variantId?: string) =>
+  a.productId === productId && lineIdentity(a) === (variantId ?? variant ?? '');
 
 export const useCartStore = create<CartStore>()(
   persist(
@@ -27,11 +34,13 @@ export const useCartStore = create<CartStore>()(
 
       addItem: (item) =>
         set((state) => {
-          const existing = state.items.find((i) => matchItem(i, item.productId, item.variant));
+          const existing = state.items.find((i) =>
+            matchItem(i, item.productId, item.variant, item.variantId)
+          );
           if (existing) {
             return {
               items: state.items.map((i) =>
-                matchItem(i, item.productId, item.variant)
+                matchItem(i, item.productId, item.variant, item.variantId)
                   ? { ...i, quantity: Math.min(i.quantity + item.quantity, i.stock) }
                   : i
               ),
@@ -40,18 +49,18 @@ export const useCartStore = create<CartStore>()(
           return { items: [...state.items, item] };
         }),
 
-      removeItem: (productId, variant) =>
+      removeItem: (productId, variant, variantId) =>
         set((state) => ({
-          items: state.items.filter((i) => !matchItem(i, productId, variant)),
+          items: state.items.filter((i) => !matchItem(i, productId, variant, variantId)),
         })),
 
-      updateQuantity: (productId, quantity, variant) =>
+      updateQuantity: (productId, quantity, variant, variantId) =>
         set((state) => ({
           items:
             quantity <= 0
-              ? state.items.filter((i) => !matchItem(i, productId, variant))
+              ? state.items.filter((i) => !matchItem(i, productId, variant, variantId))
               : state.items.map((i) =>
-                  matchItem(i, productId, variant) ? { ...i, quantity } : i
+                  matchItem(i, productId, variant, variantId) ? { ...i, quantity } : i
                 ),
         })),
 

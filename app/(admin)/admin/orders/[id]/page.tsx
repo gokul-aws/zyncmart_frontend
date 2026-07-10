@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { use,useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, RefreshCcw, Truck, DollarSign, Check, XCircle } from 'lucide-react';
 import AdminPageShell from '@/components/admin/AdminPageShell';
@@ -39,13 +39,13 @@ const PAYMENT_VARIANTS: Record<PaymentStatus, 'default' | 'success' | 'error' | 
 };
 
 interface OrderDetailPageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 export default function OrderDetailPage({ params }: OrderDetailPageProps) {
-  const { id } = params;
+  const { id } = use(params);
   const { data: order, isLoading, isError, refetch } = useAdminOrder(id);
   const updateMutation = useUpdateAdminOrderStatus();
 
@@ -202,6 +202,18 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <p className="font-semibold text-slate-900 dark:text-white">{item.name}</p>
+                        {item.color && (
+                          <p className="flex items-center gap-1.5 text-sm text-slate-500">
+                            {item.colorCode && (
+                              <span
+                                className="h-3 w-3 rounded-full border border-black/10 shrink-0"
+                                style={{ backgroundColor: item.colorCode }}
+                              />
+                            )}
+                            Color: {item.color}
+                            {item.sku && <span className="text-slate-400"> · SKU: {item.sku}</span>}
+                          </p>
+                        )}
                         {item.variant && <p className="text-sm text-slate-500">Variant: {item.variant}</p>}
                       </div>
                       <div className="text-sm text-slate-600 dark:text-slate-300">Qty {item.quantity}</div>
@@ -286,7 +298,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                   <button
                     type="button"
                     onClick={handleStatusUpdate}
-                    disabled={updateMutation.isPending}
+                    disabled={updateMutation.isLoading}
                     className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-3 text-sm font-semibold text-white hover:bg-primary-dark transition-colors disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <Check className="h-4 w-4" />
@@ -295,7 +307,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                   <button
                     type="button"
                     onClick={handleCancelOrder}
-                    disabled={!canCancel || updateMutation.isPending}
+                    disabled={!canCancel || updateMutation.isLoading}
                     className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700 hover:bg-rose-100 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <XCircle className="h-4 w-4" />
@@ -304,7 +316,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                   <button
                     type="button"
                     onClick={handleRefundOrder}
-                    disabled={!canRefund || updateMutation.isPending}
+                    disabled={!canRefund || updateMutation.isLoading}
                     className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <DollarSign className="h-4 w-4" />

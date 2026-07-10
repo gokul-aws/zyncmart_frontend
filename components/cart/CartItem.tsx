@@ -38,6 +38,17 @@ export default function CartItem({ item, compact = false }: CartItemProps) {
         >
           {item.name}
         </Link>
+        {item.color && (
+          <p className="flex items-center gap-1.5 text-xs text-gray-500 mt-0.5">
+            {item.colorCode && (
+              <span
+                className="h-3 w-3 rounded-full border border-black/10 shrink-0"
+                style={{ backgroundColor: item.colorCode }}
+              />
+            )}
+            {item.color}
+          </p>
+        )}
         {item.variant && (
           <p className="text-xs text-gray-500 mt-0.5">{item.variant}</p>
         )}
@@ -61,10 +72,10 @@ export default function CartItem({ item, compact = false }: CartItemProps) {
               <QuantitySelector
                 quantity={item.quantity}
                 max={item.stock}
-                onChange={(qty) => updateQuantity(item.productId, qty, item.variant)}
+                onChange={(qty) => updateQuantity(item.productId, qty, item.variant, item.variantId)}
               />
               <button
-                onClick={() => removeItem(item.productId, item.variant)}
+                onClick={() => removeItem(item.productId, item.variant, item.variantId)}
                 aria-label="Remove item"
                 className="p-1 text-gray-400 hover:text-error transition-colors"
               >

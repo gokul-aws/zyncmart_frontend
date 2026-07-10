@@ -17,6 +17,17 @@ const ACCEPTED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'i
 const ACCEPTED_ACCEPT = ACCEPTED_TYPES.join(',');
 const MAX_IMAGES = 10;
 
+// TODO: Product Images upload section (create mode) temporarily disabled —
+// images are now managed per color variant instead (see "Color variants"
+// below). Flip back to `true` to restore. (Typed as `boolean`, not a literal
+// `false`, so TS doesn't treat the guarded JSX as unreachable.)
+const SHOW_LEGACY_PRODUCT_IMAGES: boolean = false;
+
+// TODO: Product Options ("Size"/"Material" style generic attributes)
+// temporarily disabled — Color is now handled by the dedicated "Color
+// variants" section instead. Flip back to `true` to restore.
+const SHOW_PRODUCT_OPTIONS: boolean = false;
+
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
 function slugify(str: string): string {
@@ -44,9 +55,17 @@ function validateImageFiles(files: File[]): File[] {
   return valid;
 }
 
-const numericField = z.coerce.number().min(0, 'Must be 0 or more');
+const numericField = z.preprocess((v) => {
+  const n = Number(typeof v === 'string' ? v.trim() : v);
+  return Number.isNaN(n) ? undefined : n;
+}, z.number().min(0, 'Must be 0 or more'));
 
-const optionalNumericField = z.coerce.number().min(0, 'Must be 0 or more').optional();
+const optionalNumericField = z.preprocess((v) => {
+  const s = typeof v === 'string' ? v.trim() : v;
+  if (s === '' || v === undefined) return undefined;
+  const n = Number(s);
+  return Number.isNaN(n) ? undefined : n;
+}, z.number().min(0, 'Must be 0 or more').optional());
 
 // ─── Schema ────────────────────────────────────────────────────────────────
 
@@ -74,6 +93,18 @@ const productSchema = z.object({
       })
     )
     .optional(),
+  colorVariants: z
+    .array(
+      z.object({
+        _id: z.string().optional(),
+        color: z.string().min(1, 'Color name is required'),
+        colorCode: z.string().optional(),
+        sku: z.string().min(1, 'SKU is required'),
+        stock: numericField,
+        price: optionalNumericField,
+      })
+    )
+    .min(1, 'Add at least one color variant'),
   metaTitle: z.string().optional(),
   metaDescription: z.string().optional(),
 });
@@ -105,6 +136,14 @@ function toPayload(values: ProductFormValues): ProductCreatePayload {
         name: v.name.trim(),
         options: v.options.split(',').map((o) => o.trim()).filter(Boolean),
       })),
+    colorVariants: values.colorVariants.map((v) => ({
+      ...(v._id ? { _id: v._id } : {}),
+      color: v.color.trim(),
+      colorCode: v.colorCode?.trim() || undefined,
+      sku: v.sku.trim(),
+      stock: v.stock as number,
+      price: v.price,
+    })),
     metaTitle: values.metaTitle,
     metaDescription: values.metaDescription,
   };
@@ -114,7 +153,14 @@ function toPayload(values: ProductFormValues): ProductCreatePayload {
 
 interface AdminProductFormProps {
   initialData?: Product;
-  onSubmit: (payload: ProductCreatePayload, imageFiles: File[]) => Promise<void>;
+  // variantImageFiles is ordered to match the submitted colorVariants array —
+  // the caller zips it against the created/updated product's colorVariants
+  // (same order) to upload each color's staged images.
+  onSubmit: (
+    payload: ProductCreatePayload,
+    imageFiles: File[],
+    variantImageFiles: File[][]
+  ) => Promise<void>;
   submitLabel: string;
   isSubmitting?: boolean;
   errorMessage?: string | null;
@@ -133,6 +179,7 @@ export default function AdminProductForm({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const replaceInputRef = useRef<HTMLInputElement | null>(null);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [variantImageFiles, setVariantImageFiles] = useState<Record<string, File[]>>({});
   const [slugEdited, setSlugEdited] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [dragItemIndex, setDragItemIndex] = useState<number | null>(null);
@@ -149,6 +196,20 @@ export default function AdminProductForm({
     return () => previews.forEach(({ url }) => URL.revokeObjectURL(url));
   }, [previews]);
 
+  const variantPreviews = useMemo(() => {
+    const map: Record<string, { file: File; url: string }[]> = {};
+    for (const [fieldId, files] of Object.entries(variantImageFiles)) {
+      map[fieldId] = files.map((f) => ({ file: f, url: URL.createObjectURL(f) }));
+    }
+    return map;
+  }, [variantImageFiles]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(variantPreviews).flat().forEach(({ url }) => URL.revokeObjectURL(url));
+    };
+  }, [variantPreviews]);
+
   const {
     register,
     control,
@@ -157,7 +218,7 @@ export default function AdminProductForm({
     watch,
     setValue,
     formState: { errors },
-  } = useForm({
+  } = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
     defaultValues: {
       name: initialData?.name ?? '',
@@ -178,13 +239,32 @@ export default function AdminProductForm({
       variants:
         initialData?.variants.length
           ? initialData.variants.map((v) => ({ name: v.name, options: v.options.join(', ') }))
-          : [{ name: '', options: '' }],
+          // Product options UI is currently hidden (SHOW_PRODUCT_OPTIONS) —
+          // default to an empty array, not a blank row, since a blank row
+          // would fail validation with no way to fill it in.
+          : [],
+      colorVariants:
+        initialData?.colorVariants?.length
+          ? initialData.colorVariants.map((v) => ({
+              _id: v._id,
+              color: v.color,
+              colorCode: v.colorCode ?? '',
+              sku: v.sku,
+              stock: v.stock,
+              price: v.price,
+            }))
+          : [{ color: '', colorCode: '', sku: '', stock: 0, price: undefined }],
       metaTitle: initialData?.metaTitle ?? '',
       metaDescription: initialData?.metaDescription ?? '',
     },
   });
 
   const { fields, append, remove } = useFieldArray({ control, name: 'variants' });
+  const {
+    fields: colorVariantFields,
+    append: appendColorVariant,
+    remove: removeColorVariant,
+  } = useFieldArray({ control, name: 'colorVariants' });
 
   useEffect(() => {
     if (!initialData) return;
@@ -207,7 +287,18 @@ export default function AdminProductForm({
       variants:
         initialData.variants.length > 0
           ? initialData.variants.map((v) => ({ name: v.name, options: v.options.join(', ') }))
-          : [{ name: '', options: '' }],
+          : [],
+      colorVariants:
+        (initialData.colorVariants?.length ?? 0) > 0
+          ? initialData.colorVariants.map((v) => ({
+              _id: v._id,
+              color: v.color,
+              colorCode: v.colorCode ?? '',
+              sku: v.sku,
+              stock: v.stock,
+              price: v.price,
+            }))
+          : [{ color: '', colorCode: '', sku: '', stock: 0, price: undefined }],
       metaTitle: initialData.metaTitle ?? '',
       metaDescription: initialData.metaDescription ?? '',
     });
@@ -309,8 +400,44 @@ export default function AdminProductForm({
 
   const handleCardDragEnd = () => setDragItemIndex(null);
 
+  // ── Color variant image management (create mode only — edit mode manages
+  // each variant's live gallery via AdminProductVariantImageManager) ───────
+
+  const addVariantImages = (fieldId: string, files: File[]) => {
+    const validated = validateImageFiles(files);
+    if (validated.length === 0) return;
+    setVariantImageFiles((prev) => {
+      const combined = [...(prev[fieldId] ?? []), ...validated];
+      if (combined.length > MAX_IMAGES) {
+        toast.error(`Maximum ${MAX_IMAGES} images allowed per color. Extra files ignored.`);
+        return { ...prev, [fieldId]: combined.slice(0, MAX_IMAGES) };
+      }
+      return { ...prev, [fieldId]: combined };
+    });
+  };
+
+  const removeVariantImageFile = (fieldId: string, index: number) => {
+    setVariantImageFiles((prev) => ({
+      ...prev,
+      [fieldId]: (prev[fieldId] ?? []).filter((_, i) => i !== index),
+    }));
+  };
+
+  const handleRemoveColorVariant = (index: number) => {
+    const fieldId = colorVariantFields[index]?.id;
+    removeColorVariant(index);
+    if (fieldId) {
+      setVariantImageFiles((prev) => {
+        const next = { ...prev };
+        delete next[fieldId];
+        return next;
+      });
+    }
+  };
+
   const handleFormSubmit = async (values: ProductFormValues) => {
-    await onSubmit(toPayload(values), imageFiles);
+    const orderedVariantFiles = colorVariantFields.map((f) => variantImageFiles[f.id] ?? []);
+    await onSubmit(toPayload(values), imageFiles, orderedVariantFiles);
   };
 
   const inputClass =
@@ -324,143 +451,142 @@ export default function AdminProductForm({
         </div>
       )}
 
-      {/* ── Images (create only) ── */}
-      {!isEditMode && (
-        <div className="space-y-4 rounded-3xl border border-slate-200 bg-slate-50 p-6 dark:border-slate-700 dark:bg-slate-950">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
-                Product images
-              </h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                First image becomes the thumbnail. Drag cards to reorder. Up to {MAX_IMAGES} images.
-              </p>
-            </div>
-            <label className="inline-flex cursor-pointer items-center gap-2 rounded-2xl bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark transition-colors">
-              <Upload className="h-4 w-4" />
-              Add images
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept={ACCEPTED_ACCEPT}
-                multiple
-                className="hidden"
-                onChange={handleImageChange}
-              />
-            </label>
-          </div>
-
-          {/* Hidden replace input */}
-          <input
-            ref={replaceInputRef}
-            type="file"
-            accept={ACCEPTED_ACCEPT}
-            className="hidden"
-            onChange={handleReplaceChange}
-          />
-
-          {/* Drop zone wrapper */}
-          <div
-            onDragOver={handleZoneDragOver}
-            onDragLeave={handleZoneDragLeave}
-            onDrop={handleZoneDrop}
-            className={`relative rounded-2xl border-2 border-dashed transition-colors ${
-              isDragOver
-                ? 'border-primary bg-primary/5 dark:bg-primary/10'
-                : 'border-slate-300 dark:border-slate-600'
-            }`}
-          >
-            {previews.length === 0 ? (
-              <div className="flex h-28 flex-col items-center justify-center gap-2">
-                <ImageIcon className="h-6 w-6 text-slate-400 dark:text-slate-500" />
-                <p className="text-sm text-slate-400 dark:text-slate-500">
-                  {isDragOver
-                    ? 'Drop images here'
-                    : 'Drag & drop images here, or click "Add images" above'}
+      {SHOW_LEGACY_PRODUCT_IMAGES && !isEditMode && (
+          <div className="space-y-4 rounded-3xl border border-slate-200 bg-slate-50 p-6 dark:border-slate-700 dark:bg-slate-950">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
+                  Product images
+                </h2>
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  First image becomes the thumbnail. Drag cards to reorder. Up to {MAX_IMAGES} images.
                 </p>
               </div>
-            ) : (
-              <div className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {previews.map(({ file, url }, i) => (
-                  <div
-                    key={`${file.name}-${i}`}
-                    draggable
-                    onDragStart={(e) => handleCardDragStart(e, i)}
-                    onDragOver={(e) => handleCardDragOver(e, i)}
-                    onDragEnd={handleCardDragEnd}
-                    className={`group relative overflow-hidden rounded-2xl border bg-white transition-opacity dark:bg-slate-900 ${
-                      dragItemIndex === i
-                        ? 'border-primary opacity-50'
-                        : 'border-slate-200 dark:border-slate-700'
-                    }`}
-                  >
-                    {/* Thumbnail / Gallery badge */}
-                    <span
-                      className={`absolute left-2 top-2 z-10 rounded-full px-2 py-0.5 text-xs font-semibold shadow ${
-                        i === 0
-                          ? 'bg-primary text-white'
-                          : 'bg-black/40 text-white'
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-2xl bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark transition-colors">
+                <Upload className="h-4 w-4" />
+                Add images
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept={ACCEPTED_ACCEPT}
+                  multiple
+                  className="hidden"
+                  onChange={handleImageChange}
+                />
+              </label>
+            </div>
+
+            {/* Hidden replace input */}
+            <input
+              ref={replaceInputRef}
+              type="file"
+              accept={ACCEPTED_ACCEPT}
+              className="hidden"
+              onChange={handleReplaceChange}
+            />
+
+            {/* Drop zone wrapper */}
+            <div
+              onDragOver={handleZoneDragOver}
+              onDragLeave={handleZoneDragLeave}
+              onDrop={handleZoneDrop}
+              className={`relative rounded-2xl border-2 border-dashed transition-colors ${
+                isDragOver
+                  ? 'border-primary bg-primary/5 dark:bg-primary/10'
+                  : 'border-slate-300 dark:border-slate-600'
+              }`}
+            >
+              {previews.length === 0 ? (
+                <div className="flex h-28 flex-col items-center justify-center gap-2">
+                  <ImageIcon className="h-6 w-6 text-slate-400 dark:text-slate-500" />
+                  <p className="text-sm text-slate-400 dark:text-slate-500">
+                    {isDragOver
+                      ? 'Drop images here'
+                      : 'Drag & drop images here, or click "Add images" above'}
+                  </p>
+                </div>
+              ) : (
+                <div className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {previews.map(({ file, url }, i) => (
+                    <div
+                      key={`${file.name}-${i}`}
+                      draggable
+                      onDragStart={(e) => handleCardDragStart(e, i)}
+                      onDragOver={(e) => handleCardDragOver(e, i)}
+                      onDragEnd={handleCardDragEnd}
+                      className={`group relative overflow-hidden rounded-2xl border bg-white transition-opacity dark:bg-slate-900 ${
+                        dragItemIndex === i
+                          ? 'border-primary opacity-50'
+                          : 'border-slate-200 dark:border-slate-700'
                       }`}
                     >
-                      {i === 0 ? 'Thumbnail' : 'Gallery'}
-                    </span>
-
-                    {/* Drag handle */}
-                    <div className="absolute right-2 top-2 z-10 cursor-grab rounded-full bg-black/30 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100">
-                      <GripVertical className="h-3.5 w-3.5" />
-                    </div>
-
-                    <Image
-                      src={url}
-                      alt={file.name}
-                      width={300}
-                      height={200}
-                      className="h-36 w-full object-cover"
-                    />
-
-                    <div className="flex items-center justify-between gap-1 border-t border-slate-200 px-2 py-2 dark:border-slate-700">
-                      <span className="truncate text-xs text-slate-500 dark:text-slate-400">
-                        {file.name}
+                      {/* Thumbnail / Gallery badge */}
+                      <span
+                        className={`absolute left-2 top-2 z-10 rounded-full px-2 py-0.5 text-xs font-semibold shadow ${
+                          i === 0
+                            ? 'bg-primary text-white'
+                            : 'bg-black/40 text-white'
+                        }`}
+                      >
+                        {i === 0 ? 'Thumbnail' : 'Gallery'}
                       </span>
-                      <div className="flex flex-shrink-0 items-center gap-0.5">
-                        <button
-                          type="button"
-                          title="Replace image"
-                          onClick={() => triggerReplace(i)}
-                          className="rounded-full p-1.5 text-slate-500 hover:bg-slate-100 transition-colors dark:hover:bg-slate-800"
-                        >
-                          <RefreshCw className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          title="Remove image"
-                          onClick={() => removeImage(i)}
-                          className="rounded-full p-1.5 text-rose-600 hover:bg-rose-50 transition-colors dark:hover:bg-rose-950/30"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
+
+                      {/* Drag handle */}
+                      <div className="absolute right-2 top-2 z-10 cursor-grab rounded-full bg-black/30 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100">
+                        <GripVertical className="h-3.5 w-3.5" />
+                      </div>
+
+                      <Image
+                        src={url}
+                        alt={file.name}
+                        width={300}
+                        height={200}
+                        className="h-36 w-full object-cover"
+                      />
+
+                      <div className="flex items-center justify-between gap-1 border-t border-slate-200 px-2 py-2 dark:border-slate-700">
+                        <span className="truncate text-xs text-slate-500 dark:text-slate-400">
+                          {file.name}
+                        </span>
+                        <div className="flex flex-shrink-0 items-center gap-0.5">
+                          <button
+                            type="button"
+                            title="Replace image"
+                            onClick={() => triggerReplace(i)}
+                            className="rounded-full p-1.5 text-slate-500 hover:bg-slate-100 transition-colors dark:hover:bg-slate-800"
+                          >
+                            <RefreshCw className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            title="Remove image"
+                            onClick={() => removeImage(i)}
+                            className="rounded-full p-1.5 text-rose-600 hover:bg-rose-50 transition-colors dark:hover:bg-rose-950/30"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
+                  ))}
+                </div>
+              )}
 
-            {/* Drag-over overlay */}
-            {isDragOver && (
-              <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-2xl">
-                <span className="rounded-2xl bg-primary px-4 py-2 text-sm font-semibold text-white shadow-lg">
-                  Drop to add
-                </span>
-              </div>
-            )}
+              {/* Drag-over overlay */}
+              {isDragOver && (
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-2xl">
+                  <span className="rounded-2xl bg-primary px-4 py-2 text-sm font-semibold text-white shadow-lg">
+                    Drop to add
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <p className="text-xs text-slate-400 dark:text-slate-500">
+              JPEG, PNG, WebP, GIF · Max 10 MB per file · Up to {MAX_IMAGES} images
+            </p>
           </div>
-
-          <p className="text-xs text-slate-400 dark:text-slate-500">
-            JPEG, PNG, WebP, GIF · Max 10 MB per file · Up to {MAX_IMAGES} images
-          </p>
-        </div>
-      )}
+        )}
 
       {/* ── Core fields ── */}
       <div className="grid gap-6 lg:grid-cols-2">
@@ -683,89 +809,286 @@ export default function AdminProductForm({
         )}
       </div>
 
-      {/* ── Variants ── */}
+      {/* ── Color Variants ── */}
       <div className="space-y-6 rounded-3xl border border-slate-200 bg-slate-50 p-6 dark:border-slate-700 dark:bg-slate-950">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
-              Product options
+              Color variants *
             </h2>
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              Define options like Color, Size, or Material. Separate values with commas.
+              Each color has its own images, stock, SKU, and an optional price override
+              (otherwise it inherits the base price above). At least one color is required.
             </p>
           </div>
           <button
             type="button"
-            onClick={() => append({ name: '', options: '' })}
+            onClick={() => appendColorVariant({ color: '', colorCode: '', sku: '', stock: 0, price: undefined })}
             className="inline-flex items-center gap-2 rounded-2xl bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-dark transition-colors"
           >
             <Plus className="h-4 w-4" />
-            Add option
+            Add color variant
           </button>
         </div>
 
-        {fields.length === 0 && (
-          <p className="rounded-2xl border-2 border-dashed border-slate-300 py-6 text-center text-sm text-slate-400 dark:border-slate-600 dark:text-slate-500">
-            No options yet — click "Add option" to define Color, Size, etc.
-          </p>
+        {typeof errors.colorVariants?.message === 'string' && (
+          <p className="text-xs text-rose-500">{errors.colorVariants.message}</p>
         )}
 
         <div className="space-y-4">
-          {fields.map((field, index) => (
-            <div
-              key={field.id}
-              className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 lg:grid-cols-[auto_1fr_1fr_auto]"
-            >
-              <div className="hidden items-center justify-center lg:flex">
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                  {index + 1}
-                </span>
-              </div>
-
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-slate-600 dark:text-slate-400">
-                  Option name
-                </label>
-                <input
-                  {...register(`variants.${index}.name` as const)}
-                  className={inputClass}
-                  placeholder="Color"
-                />
-                {errors.variants?.[index]?.name && (
-                  <p className="mt-1 text-xs text-rose-500">
-                    {errors.variants[index]?.name?.message}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-slate-600 dark:text-slate-400">
-                  Values
-                  <span className="ml-1 font-normal text-slate-400">(comma-separated)</span>
-                </label>
-                <input
-                  {...register(`variants.${index}.options` as const)}
-                  className={inputClass}
-                  placeholder="Gold, Rose Gold, Silver"
-                />
-                {errors.variants?.[index]?.options && (
-                  <p className="mt-1 text-xs text-rose-500">
-                    {errors.variants[index]?.options?.message}
-                  </p>
-                )}
-              </div>
-
-              <button
-                type="button"
-                onClick={() => remove(index)}
-                className="self-end rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700 hover:bg-rose-100 transition-colors dark:border-rose-600/40 dark:bg-rose-950/20 dark:text-rose-200 dark:hover:bg-rose-900"
+          {colorVariantFields.map((field, index) => {
+            const files = variantPreviews[field.id] ?? [];
+            const colorCodeValue = watch(`colorVariants.${index}.colorCode`);
+            return (
+              <div
+                key={field.id}
+                className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900"
               >
-                Remove
-              </button>
-            </div>
-          ))}
+                <input type="hidden" {...register(`colorVariants.${index}._id` as const)} />
+
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-slate-600 dark:text-slate-400">
+                      Color name *
+                    </label>
+                    <input
+                      {...register(`colorVariants.${index}.color` as const)}
+                      className={inputClass}
+                      placeholder="Black"
+                    />
+                    {errors.colorVariants?.[index]?.color && (
+                      <p className="mt-1 text-xs text-rose-500">
+                        {errors.colorVariants[index]?.color?.message}
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-slate-600 dark:text-slate-400">
+                      Color code (hex)
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={
+                          /^#([0-9A-Fa-f]{6})$/.test(colorCodeValue ?? '')
+                            ? (colorCodeValue as string)
+                            : '#000000'
+                        }
+                        onChange={(e) =>
+                          setValue(`colorVariants.${index}.colorCode`, e.target.value, {
+                            shouldDirty: true,
+                          })
+                        }
+                        aria-label="Pick color"
+                        className="h-9 w-9 flex-shrink-0 cursor-pointer rounded-lg border border-slate-200 bg-transparent p-0.5 dark:border-slate-700"
+                      />
+                      <input
+                        {...register(`colorVariants.${index}.colorCode` as const)}
+                        className={inputClass}
+                        placeholder="#000000"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-slate-600 dark:text-slate-400">
+                      SKU *
+                    </label>
+                    <input
+                      {...register(`colorVariants.${index}.sku` as const)}
+                      className={inputClass}
+                      placeholder="TS-BLK"
+                    />
+                    {errors.colorVariants?.[index]?.sku && (
+                      <p className="mt-1 text-xs text-rose-500">
+                        {errors.colorVariants[index]?.sku?.message}
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-slate-600 dark:text-slate-400">
+                      Stock *
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      {...register(`colorVariants.${index}.stock` as const)}
+                      className={inputClass}
+                      placeholder="20"
+                    />
+                    {errors.colorVariants?.[index]?.stock && (
+                      <p className="mt-1 text-xs text-rose-500">
+                        {errors.colorVariants[index]?.stock?.message}
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-slate-600 dark:text-slate-400">
+                      Price override
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      {...register(`colorVariants.${index}.price` as const)}
+                      className={inputClass}
+                      placeholder="Inherits base price"
+                    />
+                  </div>
+                </div>
+
+                {!isEditMode && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                        Images for this color
+                      </label>
+                      <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">
+                        <Upload className="h-3.5 w-3.5" />
+                        Add images
+                        <input
+                          type="file"
+                          accept={ACCEPTED_ACCEPT}
+                          multiple
+                          className="hidden"
+                          onChange={(e) => {
+                            if (e.target.files) addVariantImages(field.id, Array.from(e.target.files));
+                            e.target.value = '';
+                          }}
+                        />
+                      </label>
+                    </div>
+
+                    {files.length === 0 ? (
+                      <div className="flex h-16 items-center justify-center rounded-xl border-2 border-dashed border-slate-300 text-xs text-slate-400 dark:border-slate-600 dark:text-slate-500">
+                        No images yet for this color
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {files.map(({ file, url }, i) => (
+                          <div
+                            key={`${file.name}-${i}`}
+                            className="group relative h-16 w-16 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700"
+                          >
+                            <Image src={url} alt={file.name} fill className="object-cover" />
+                            <button
+                              type="button"
+                              title="Remove image"
+                              onClick={() => removeVariantImageFile(field.id, i)}
+                              className="absolute right-0.5 top-0.5 rounded-full bg-black/50 p-0.5 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveColorVariant(index)}
+                    className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700 hover:bg-rose-100 transition-colors dark:border-rose-600/40 dark:bg-rose-950/20 dark:text-rose-200 dark:hover:bg-rose-900"
+                  >
+                    Remove color
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
+
+      {/* ── Variants ── */}
+      {SHOW_PRODUCT_OPTIONS && (
+        <div className="space-y-6 rounded-3xl border border-slate-200 bg-slate-50 p-6 dark:border-slate-700 dark:bg-slate-950">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
+                Product options
+              </h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                Define options like Color, Size, or Material. Separate values with commas.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => append({ name: '', options: '' })}
+              className="inline-flex items-center gap-2 rounded-2xl bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-dark transition-colors"
+            >
+              <Plus className="h-4 w-4" />
+              Add option
+            </button>
+          </div>
+
+          {fields.length === 0 && (
+            <p className="rounded-2xl border-2 border-dashed border-slate-300 py-6 text-center text-sm text-slate-400 dark:border-slate-600 dark:text-slate-500">
+              No options yet — click "Add option" to define Color, Size, etc.
+            </p>
+          )}
+
+          <div className="space-y-4">
+            {fields.map((field, index) => (
+              <div
+                key={field.id}
+                className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 lg:grid-cols-[auto_1fr_1fr_auto]"
+              >
+                <div className="hidden items-center justify-center lg:flex">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                    {index + 1}
+                  </span>
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-slate-600 dark:text-slate-400">
+                    Option name
+                  </label>
+                  <input
+                    {...register(`variants.${index}.name` as const)}
+                    className={inputClass}
+                    placeholder="Color"
+                  />
+                  {errors.variants?.[index]?.name && (
+                    <p className="mt-1 text-xs text-rose-500">
+                      {errors.variants[index]?.name?.message}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-slate-600 dark:text-slate-400">
+                    Values
+                    <span className="ml-1 font-normal text-slate-400">(comma-separated)</span>
+                  </label>
+                  <input
+                    {...register(`variants.${index}.options` as const)}
+                    className={inputClass}
+                    placeholder="Gold, Rose Gold, Silver"
+                  />
+                  {errors.variants?.[index]?.options && (
+                    <p className="mt-1 text-xs text-rose-500">
+                      {errors.variants[index]?.options?.message}
+                    </p>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => remove(index)}
+                  className="self-end rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700 hover:bg-rose-100 transition-colors dark:border-rose-600/40 dark:bg-rose-950/20 dark:text-rose-200 dark:hover:bg-rose-900"
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── SEO ── */}
       <div className="space-y-4 rounded-3xl border border-slate-200 bg-slate-50 p-6 dark:border-slate-700 dark:bg-slate-950">

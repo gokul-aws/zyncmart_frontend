@@ -16,7 +16,7 @@ export default function OrderSummary() {
       <ul className="divide-y divide-gray-200">
         {items.map((item) => (
           <li
-            key={`${item.productId}-${item.variant ?? ''}`}
+            key={`${item.productId}-${item.variantId ?? item.variant ?? ''}`}
             className="py-3 flex gap-3 items-start"
           >
             <div className="relative w-14 h-14 shrink-0 rounded-lg overflow-hidden bg-gray-100">
@@ -34,6 +34,17 @@ export default function OrderSummary() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-gray-900 line-clamp-2">{item.name}</p>
+              {item.color && (
+                <p className="flex items-center gap-1.5 text-xs text-gray-500 mt-0.5">
+                  {item.colorCode && (
+                    <span
+                      className="h-3 w-3 rounded-full border border-black/10 shrink-0"
+                      style={{ backgroundColor: item.colorCode }}
+                    />
+                  )}
+                  {item.color}
+                </p>
+              )}
               {item.variant && (
                 <p className="text-xs text-gray-500 mt-0.5">{item.variant}</p>
               )}

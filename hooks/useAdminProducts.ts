@@ -11,6 +11,8 @@ import {
   deleteProduct,
   uploadProductImages,
   removeProductImage,
+  uploadVariantImages,
+  removeVariantImage,
 } from '@/lib/api/products';
 import type {
   Product,
@@ -18,14 +20,13 @@ import type {
   ProductFilters,
   ProductUpdatePayload,
 } from '@/types/product';
-import type { PaginatedResponse } from '@/types/api';
 
 export function useAdminProducts(filters: ProductFilters) {
-  return useQuery<PaginatedResponse<Product>>({
+  return useQuery({
     queryKey: ['admin', 'products', filters],
     queryFn: () => fetchAdminProducts(filters),
     staleTime: 60 * 1000,
-    placeholderData: (previousData) => previousData,
+    keepPreviousData: true,
   });
 }
 
@@ -150,6 +151,56 @@ export function useDeleteAdminProductImage(productSlug: string) {
   return useMutation({
     mutationFn: ({ productId, publicId }: { productId: string; publicId: string }) =>
       removeProductImage(productId, publicId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'product', productSlug] });
+      queryClient.invalidateQueries({ queryKey: ['admin', 'products'] });
+      toast.success('Image removed successfully.');
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.message || error?.message || 'Failed to remove image.');
+    },
+  });
+}
+
+export function useUploadAdminVariantImages(productSlug: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      productId,
+      variantId,
+      files,
+      onProgress,
+    }: {
+      productId: string;
+      variantId: string;
+      files: File[];
+      onProgress?: (percent: number) => void;
+    }) => uploadVariantImages(productId, variantId, files, onProgress),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'product', productSlug] });
+      queryClient.invalidateQueries({ queryKey: ['admin', 'products'] });
+      toast.success('Color variant images uploaded successfully.');
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.message || error?.message || 'Failed to upload color variant images.');
+    },
+  });
+}
+
+export function useDeleteAdminVariantImage(productSlug: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      productId,
+      variantId,
+      publicId,
+    }: {
+      productId: string;
+      variantId: string;
+      publicId: string;
+    }) => removeVariantImage(productId, variantId, publicId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'product', productSlug] });
       queryClient.invalidateQueries({ queryKey: ['admin', 'products'] });

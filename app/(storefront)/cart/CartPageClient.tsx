@@ -31,7 +31,7 @@ export default function CartPageClient() {
         {/* Cart items */}
         <div className="lg:col-span-2 bg-white border border-gray-100 rounded-xl divide-y divide-gray-100 px-4">
           {items.map((item) => (
-            <CartItem key={`${item.productId}-${item.variant}`} item={item} />
+            <CartItem key={`${item.productId}-${item.variantId ?? item.variant}`} item={item} />
           ))}
         </div>
 

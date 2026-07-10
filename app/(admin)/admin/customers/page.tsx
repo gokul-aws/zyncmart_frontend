@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, type FormEvent, Suspense } from 'react';
+import { useMemo, type FormEvent } from 'react';
 import Link from 'next/link';
 import { Search, Filter, RefreshCcw, Plus } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -24,7 +24,7 @@ const STATUS_OPTIONS = [
   { value: 'inactive', label: 'Inactive' },
 ] as const;
 
-function CustomersPageContent() {
+export default function CustomersPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -224,19 +224,5 @@ function CustomersPageContent() {
         </section>
       </div>
     </AdminPageShell>
-  );
-}
-
-export default function CustomersPage() {
-  return (
-    <Suspense fallback={
-      <AdminPageShell title="Customers" description="Manage users, assign roles, and keep customer accounts active.">
-        <div className="flex h-96 items-center justify-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-        </div>
-      </AdminPageShell>
-    }>
-      <CustomersPageContent />
-    </Suspense>
   );
 }

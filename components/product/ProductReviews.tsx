@@ -61,7 +61,7 @@ export default function ProductReviews({ ratings, productSlug }: ProductReviewsP
 
           <div className="hidden sm:flex flex-col gap-2 min-w-[200px]">
             {bars.map((star) => (
-              <div key={star} className="flex items-center gap-3 text-xs font-bold text-gray-400 uppercase tracking-tighter">
+              <div key={star} className="flex items-center gap-3 text-xs font-bold text-gray-400 uppercase tracking-wide">
                 <span className="w-4 text-right">{star}</span>
                 <Star className="w-3 h-3 fill-amber-400 text-amber-400 shrink-0" />
                 <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
@@ -128,7 +128,7 @@ export default function ProductReviews({ ratings, productSlug }: ProductReviewsP
         ) : (
           <div className="flex flex-col">
             <div className="flex items-center justify-between mb-8">
-              <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">
+              <h3 className="text-xl font-bold text-gray-900 tracking-tight font-display">
                 Customer Reviews
               </h3>
             </div>

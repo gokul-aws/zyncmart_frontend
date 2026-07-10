@@ -25,7 +25,11 @@ export default function LoginClient() {
   } = useForm<FormData>({ resolver: zodResolver(schema) });
 
   const searchParams = useSearchParams();
-  const redirect = searchParams?.get('redirect') ?? '/account';
+  // This page now handles both customer and admin sign-in (see AGENTS/task
+  // notes on the unified login flow). With no explicit `redirect` query param,
+  // land on Home; useAuth.signIn() overrides this to the admin dashboard when
+  // the authenticated user's role is 'admin'.
+  const redirect = searchParams?.get('redirect') ?? '/';
 
   const onSubmit = async (data: FormData) => {
     try {
@@ -47,7 +51,7 @@ export default function LoginClient() {
           <p className="text-sm text-gray-500 mb-6">Sign in to your account</p>
 
           {error && (
-            <div className="mb-4 px-4 py-3 bg-red-50 border border-red-100 rounded-lg text-sm text-error">
+            <div className="mb-4 px-4 py-3 bg-red-50 border border-red-100 rounded-lg text-sm text-error whitespace-pre-line">
               {error}
             </div>
           )}

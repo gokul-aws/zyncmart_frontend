@@ -76,7 +76,11 @@ export default function CartDrawer() {
             </div>
           ) : (
             items.map((item) => (
-              <CartItem key={`${item.productId}-${item.variant}`} item={item} compact />
+              <CartItem
+                key={`${item.productId}-${item.variantId ?? item.variant}`}
+                item={item}
+                compact
+              />
             ))
           )}
         </div>

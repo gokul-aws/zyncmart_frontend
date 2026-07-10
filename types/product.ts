@@ -9,6 +9,31 @@ export interface ProductVariant {
   options: string[];
 }
 
+// A true per-color variant: its own images, stock, SKU, and an optional
+// price override. Distinct from ProductVariant above, which is just a
+// generic option-group label (e.g. Size) with no price/stock/image of its own.
+export interface ColorVariant {
+  _id?: string;
+  color: string;
+  colorCode?: string;
+  images: ProductImage[];
+  stock: number;
+  sku: string;
+  price?: number;
+}
+
+// The subset of ColorVariant fields the admin form submits — images are
+// managed independently via uploadVariantImages, mirroring how top-level
+// product images are handled outside the create/update payload.
+export interface ColorVariantInput {
+  _id?: string;
+  color: string;
+  colorCode?: string;
+  sku: string;
+  stock: number;
+  price?: number;
+}
+
 export interface Product {
   _id: string;
   name: string;
@@ -25,6 +50,7 @@ export interface Product {
   weight?: number;
   images: ProductImage[];
   variants: ProductVariant[];
+  colorVariants: ColorVariant[];
   tags: string[];
   isFeatured: boolean;
   isActive: boolean;
@@ -48,6 +74,7 @@ export interface ProductCreatePayload {
   lowStockThreshold: number;
   weight?: number;
   variants?: ProductVariant[];
+  colorVariants: ColorVariantInput[];
   tags?: string[];
   isFeatured?: boolean;
   isActive?: boolean;
@@ -56,7 +83,7 @@ export interface ProductCreatePayload {
   images?: ProductImage[];
 }
 
-export interface ProductUpdatePayload extends Partial<ProductCreatePayload> {}
+export interface ProductUpdatePayload extends ProductCreatePayload {}
 
 export interface ProductFilters {
   category?: string;

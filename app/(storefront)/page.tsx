@@ -44,36 +44,19 @@ export default async function HomePage() {
   let newArrivals: Product[] = [];
   let bestSellers: Product[] = [];
 
-  // Fetch data in parallel but handle errors individually
-  const [categoriesRes, featuredRes, newArrivalsRes, bestSellersRes] = await Promise.allSettled([
-    fetchCategories(),
-    fetchProducts({ isFeatured: true, limit: 10 }),
-    fetchNewArrivals(),
-    fetchBestSellers(),
-  ]);
-
-  if (categoriesRes.status === 'fulfilled') {
-    categories = categoriesRes.value.data ?? [];
-  } else {
-    console.error('Failed to fetch categories:', categoriesRes.reason);
-  }
-
-  if (featuredRes.status === 'fulfilled') {
-    featuredProducts = featuredRes.value.data ?? [];
-  } else {
-    console.error('Failed to fetch featured products:', featuredRes.reason);
-  }
-
-  if (newArrivalsRes.status === 'fulfilled') {
-    newArrivals = newArrivalsRes.value.data ?? [];
-  } else {
-    console.error('Failed to fetch new arrivals:', newArrivalsRes.reason);
-  }
-
-  if (bestSellersRes.status === 'fulfilled') {
-    bestSellers = bestSellersRes.value.data ?? [];
-  } else {
-    console.error('Failed to fetch best sellers:', bestSellersRes.reason);
+  try {
+    const [categoriesRes, featuredRes, newArrivalsRes, bestSellersRes] = await Promise.all([
+      fetchCategories(),
+      fetchProducts({ isFeatured: true, limit: 10 }),
+      fetchNewArrivals(),
+      fetchBestSellers(),
+    ]);
+    categories = categoriesRes.data ?? [];
+    featuredProducts = featuredRes.data ?? [];
+    newArrivals = newArrivalsRes.data ?? [];
+    bestSellers = bestSellersRes.data ?? [];
+  } catch {
+    // API unreachable during build — sections render empty until revalidation
   }
 
   return (
@@ -82,16 +65,16 @@ export default async function HomePage() {
       <HeroBanner />
 
       {/* 2. Category carousel */}
-      {categories.length > 0 && <FeaturedCategories categories={categories} />}
+      <FeaturedCategories categories={categories} />
 
       {/* 3. New Arrivals */}
-      {newArrivals.length > 0 && <NewArrivals products={newArrivals} />}
+      <NewArrivals products={newArrivals} />
 
       {/* 4. Promotional strip */}
       <OfferBanner />
 
       {/* 5. Best Sellers */}
-      {bestSellers.length > 0 && <BestSellers products={bestSellers} />}
+      <BestSellers products={bestSellers} />
 
       {/* 6. Featured products (2-row horizontal scroll) */}
       {/* <FeaturedProducts products={featuredProducts} /> */}

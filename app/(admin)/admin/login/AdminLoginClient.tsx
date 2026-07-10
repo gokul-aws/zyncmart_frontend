@@ -45,7 +45,7 @@ export default function AdminLoginClient() {
           <p className="text-sm text-gray-500 mb-6">Enter your admin credentials to access the dashboard.</p>
 
           {error && (
-            <div className="mb-4 px-4 py-3 bg-red-50 border border-red-100 rounded-lg text-sm text-error">
+            <div className="mb-4 px-4 py-3 bg-red-50 border border-red-100 rounded-lg text-sm text-error whitespace-pre-line">
               {error}
             </div>
           )}

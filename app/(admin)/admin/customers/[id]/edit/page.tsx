@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { use, useEffect } from 'react';
 import Link from 'next/link';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -16,11 +16,15 @@ const updateUserSchema = z.object({
   phone: z.string().min(10, 'Enter a valid phone number').optional(),
   password: z.string().min(8, 'Password must be at least 8 characters').optional(),
   role: z.enum(['user', 'admin']),
-  isActive: z.preprocess((val) => val === 'true' || val === true, z.boolean()).optional(),
+  isActive: z.boolean(),
 });
 
-export default function EditCustomerPage({ params }: { params: { id: string } }) {
-  const { id } = params;
+interface EditCustomerPageProps {
+  params: Promise<{ id: string }>;
+}
+
+export default function EditCustomerPage({ params }: EditCustomerPageProps) {
+  const { id } = use(params);
   const router = useRouter();
   const { data: user, isLoading, isError, refetch } = useAdminUser(id);
   const updateMutation = useUpdateAdminUser();
@@ -30,7 +34,7 @@ export default function EditCustomerPage({ params }: { params: { id: string } })
     handleSubmit,
     reset,
     formState: { errors, isSubmitting },
-  } = useForm({
+  } = useForm<UpdateUserPayload>({
     resolver: zodResolver(updateUserSchema),
     defaultValues: {
       name: '',
@@ -55,8 +59,8 @@ export default function EditCustomerPage({ params }: { params: { id: string } })
     }
   }, [reset, user]);
 
-  const onSubmit = async (values: any) => {
-    await updateMutation.mutateAsync({ id, payload: values as UpdateUserPayload });
+  const onSubmit = async (values: UpdateUserPayload) => {
+    await updateMutation.mutateAsync({ id, payload: values });
   };
 
   return (
@@ -153,7 +157,7 @@ export default function EditCustomerPage({ params }: { params: { id: string } })
               <label className="block">
                 <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Account status</span>
                 <select
-                  {...register('isActive')}
+                  {...register('isActive', { setValueAs: (v) => v === 'true' })}
                   className="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
                 >
                   <option value="true">Active</option>

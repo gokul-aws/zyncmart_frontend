@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
@@ -22,12 +23,46 @@ interface ProductCardProps {
 export default function ProductCard({ product, view = 'grid', priority = false }: ProductCardProps) {
   const addItem = useCartStore((state) => state.addItem);
 
+  const MAX_SWATCHES = 5;
+  const colorVariants = product.colorVariants ?? [];
+  const visibleColors = colorVariants.slice(0, MAX_SWATCHES);
+  const extraColorCount = colorVariants.length - visibleColors.length;
+
+  // Defaults to the first color variant; hovering a swatch previews that
+  // color's image instead, without navigating away from the listing.
+  const [hoveredColorIndex, setHoveredColorIndex] = useState<number | null>(null);
+  const activeVariant = colorVariants[hoveredColorIndex ?? 0] ?? null;
+
   const primaryImage =
-    product.images.find((i) => i.isPrimary)?.url ?? product.images[0]?.url;
+    activeVariant?.images?.find((i) => i.isPrimary)?.url ??
+    activeVariant?.images?.[0]?.url ??
+    product.images.find((i) => i.isPrimary)?.url ??
+    product.images[0]?.url;
 
   const hasDiscount = product.comparePrice && product.comparePrice > product.price;
   const isLowStock = product.stock > 0 && product.stock <= product.lowStockThreshold;
   const isOutOfStock = product.stock === 0;
+
+  const ColorSwatches = colorVariants.length > 0 && (
+    <div className="flex items-center gap-1 mt-1.5">
+      {visibleColors.map((variant, index) => (
+        <span
+          key={variant._id ?? variant.color}
+          title={variant.color}
+          onMouseEnter={(e) => {
+            e.preventDefault();
+            setHoveredColorIndex(index);
+          }}
+          onMouseLeave={() => setHoveredColorIndex(null)}
+          className="h-3.5 w-3.5 rounded-full border border-black/10"
+          style={{ backgroundColor: variant.colorCode || '#e5e7eb' }}
+        />
+      ))}
+      {extraColorCount > 0 && (
+        <span className="text-[10px] text-gray-400">+{extraColorCount}</span>
+      )}
+    </div>
+  );
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -78,6 +113,7 @@ export default function ProductCard({ product, view = 'grid', priority = false }
             <StarRating rating={product.ratings?.average ?? 0} count={product.ratings?.count ?? 0} />
           </div>
           <PriceDisplay price={product.price} comparePrice={product.comparePrice} size="sm" />
+          {ColorSwatches}
         </div>
         <div className="flex flex-col gap-2">
           <WishlistButton productId={product._id} />
@@ -175,6 +211,7 @@ export default function ProductCard({ product, view = 'grid', priority = false }
           <div className="mt-1.5">
             <PriceDisplay price={product.price} comparePrice={product.comparePrice} size="sm" />
           </div>
+          {ColorSwatches}
 
           {/* Mobile add-to-cart */}
           <button

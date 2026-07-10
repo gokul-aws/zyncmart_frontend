@@ -5,6 +5,10 @@ export interface DashboardRevenue {
   todayOrders: number;
   monthly: number;
   monthlyOrders: number;
+  last7Days: Array<{
+    date: string;
+    revenue: number;
+  }>;
 }
 
 export interface DashboardRevenuePoint {
@@ -33,6 +37,10 @@ export interface RecentOrder {
   orderNumber: string;
   status: OrderStatus;
   pricing: {
+    subtotal: number;
+    discount: number;
+    shipping: number;
+    tax: number;
     total: number;
   };
   user: {
@@ -40,17 +48,47 @@ export interface RecentOrder {
     name: string;
     email: string;
   };
+  items: Array<{
+    product: string;
+    name: string;
+    image: string;
+    price: number;
+    quantity: number;
+    variant: string;
+    _id: string;
+  }>;
+  shippingAddress: {
+    name: string;
+    phone: string;
+    line1: string;
+    line2: string;
+    city: string;
+    state: string;
+    pincode: string;
+    _id: string;
+  };
+  payment: {
+    method: string;
+    status: string;
+    razorpayOrderId?: string;
+    paidAt?: string;
+    razorpayPaymentId?: string;
+  };
   createdAt: string;
+  updatedAt: string;
+  __v: number;
 }
 
 export interface DashboardStats {
-  totalOrders: number;
-  totalRevenue: number;
-  totalCustomers: number;
-  totalProducts: number;
-  pendingOrders: number;
-  revenueAnalytics: DashboardRevenuePoint[];
-  topSellingProducts: TopSellingProduct[];
+  stats: {
+    totalOrders: number;
+    totalRevenue: number;
+    totalCustomers: number;
+    totalProducts: number;
+    pendingOrders: number;
+  };
+  revenue: DashboardRevenue;
+  orderStatusCounts: Record<string, number>;
+  lowStockProducts: LowStockProduct[];
   recentOrders: RecentOrder[];
-  orderStatusCounts: Record<OrderStatus, number>;
 }
