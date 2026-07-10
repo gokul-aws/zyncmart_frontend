@@ -29,7 +29,9 @@ const PAYMENT_STATUSES = [
   { value: 'refunded', label: 'Refunded' },
 ] as const;
 
-export default function OrdersPage() {
+import { Suspense } from 'react';
+
+function OrdersPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -230,5 +232,24 @@ export default function OrdersPage() {
         </section>
       </div>
     </AdminPageShell>
+  );
+}
+
+export default function OrdersPage() {
+  return (
+    <Suspense
+      fallback={
+        <AdminPageShell
+          title="Orders"
+          description="Track, update, and manage customer orders."
+        >
+          <div className="rounded-3xl border border-slate-200 bg-white p-10 text-center text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
+            Loading orders…
+          </div>
+        </AdminPageShell>
+      }
+    >
+      <OrdersPageContent />
+    </Suspense>
   );
 }

@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { Suspense } from 'react';
 import AdminLoginClient from './AdminLoginClient';
 
 // TODO: Admin Sign In is temporarily disabled as a separate UI entry point.
@@ -14,5 +15,9 @@ export const metadata: Metadata = {
 };
 
 export default function AdminLoginPage() {
-  return <AdminLoginClient />;
+  return (
+    <Suspense>
+      <AdminLoginClient />
+    </Suspense>
+  );
 }

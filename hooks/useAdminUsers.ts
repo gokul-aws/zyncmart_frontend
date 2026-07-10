@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
@@ -26,7 +26,7 @@ export function useAdminUsers(filters: AdminUserFilters) {
     queryKey: ['admin', 'users', filters],
     queryFn: () => fetchAdminUsers(filters),
     staleTime: 60_000,
-    keepPreviousData: true,
+    placeholderData: keepPreviousData,
   });
 }
 

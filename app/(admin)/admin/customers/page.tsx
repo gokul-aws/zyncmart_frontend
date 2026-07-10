@@ -24,7 +24,9 @@ const STATUS_OPTIONS = [
   { value: 'inactive', label: 'Inactive' },
 ] as const;
 
-export default function CustomersPage() {
+import { Suspense } from 'react';
+
+function CustomersPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -224,5 +226,24 @@ export default function CustomersPage() {
         </section>
       </div>
     </AdminPageShell>
+  );
+}
+
+export default function CustomersPage() {
+  return (
+    <Suspense
+      fallback={
+        <AdminPageShell
+          title="Customers"
+          description="Manage users, assign roles, and keep customer accounts active."
+        >
+          <div className="rounded-3xl border border-slate-200 bg-white p-10 text-center text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
+            Loading customers…
+          </div>
+        </AdminPageShell>
+      }
+    >
+      <CustomersPageContent />
+    </Suspense>
   );
 }

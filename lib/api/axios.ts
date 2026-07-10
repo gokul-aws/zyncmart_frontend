@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { AxiosHeaders } from 'axios';
 import type { InternalAxiosRequestConfig } from 'axios';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
@@ -16,10 +16,11 @@ api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
     const { useAuthStore } = await import('@/lib/store/authStore');
     const token: string | null = useAuthStore.getState().accessToken;
     if (token) {
-      config.headers = {
-        ...config.headers,
-        Authorization: `Bearer ${token}`,
-      };
+      if (!config.headers) {
+        config.headers = new AxiosHeaders();
+      }
+
+      config.headers.set("Authorization", `Bearer ${token}`);
     }
   }
   return config;
@@ -84,10 +85,10 @@ api.interceptors.response.use(
         }
 
         if (config.headers) {
-          config.headers = {
-            ...config.headers,
-            Authorization: `Bearer ${newToken}`,
-          };
+          if (!config.headers) {
+            config.headers = new AxiosHeaders();
+          }
+          config.headers.set('Authorization', `Bearer ${newToken}`);
         }
 
         return api(config);

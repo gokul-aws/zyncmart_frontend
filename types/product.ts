@@ -83,7 +83,7 @@ export interface ProductCreatePayload {
   images?: ProductImage[];
 }
 
-export interface ProductUpdatePayload extends ProductCreatePayload {}
+export type ProductUpdatePayload = Partial<ProductCreatePayload>;
 
 export interface ProductFilters {
   category?: string;

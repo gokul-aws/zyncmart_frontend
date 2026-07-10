@@ -219,7 +219,7 @@ export default function AdminProductForm({
     setValue,
     formState: { errors },
   } = useForm<ProductFormValues>({
-    resolver: zodResolver(productSchema),
+    resolver: zodResolver(productSchema) as any,
     defaultValues: {
       name: initialData?.name ?? '',
       slug: initialData?.slug ?? '',
@@ -246,13 +246,13 @@ export default function AdminProductForm({
       colorVariants:
         initialData?.colorVariants?.length
           ? initialData.colorVariants.map((v) => ({
-              _id: v._id,
-              color: v.color,
-              colorCode: v.colorCode ?? '',
-              sku: v.sku,
-              stock: v.stock,
-              price: v.price,
-            }))
+            _id: v._id,
+            color: v.color,
+            colorCode: v.colorCode ?? '',
+            sku: v.sku,
+            stock: v.stock,
+            price: v.price,
+          }))
           : [{ color: '', colorCode: '', sku: '', stock: 0, price: undefined }],
       metaTitle: initialData?.metaTitle ?? '',
       metaDescription: initialData?.metaDescription ?? '',
@@ -291,13 +291,13 @@ export default function AdminProductForm({
       colorVariants:
         (initialData.colorVariants?.length ?? 0) > 0
           ? initialData.colorVariants.map((v) => ({
-              _id: v._id,
-              color: v.color,
-              colorCode: v.colorCode ?? '',
-              sku: v.sku,
-              stock: v.stock,
-              price: v.price,
-            }))
+            _id: v._id,
+            color: v.color,
+            colorCode: v.colorCode ?? '',
+            sku: v.sku,
+            stock: v.stock,
+            price: v.price,
+          }))
           : [{ color: '', colorCode: '', sku: '', stock: 0, price: undefined }],
       metaTitle: initialData.metaTitle ?? '',
       metaDescription: initialData.metaDescription ?? '',
@@ -452,141 +452,138 @@ export default function AdminProductForm({
       )}
 
       {SHOW_LEGACY_PRODUCT_IMAGES && !isEditMode && (
-          <div className="space-y-4 rounded-3xl border border-slate-200 bg-slate-50 p-6 dark:border-slate-700 dark:bg-slate-950">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
-                  Product images
-                </h2>
-                <p className="text-sm text-slate-500 dark:text-slate-400">
-                  First image becomes the thumbnail. Drag cards to reorder. Up to {MAX_IMAGES} images.
+        <div className="space-y-4 rounded-3xl border border-slate-200 bg-slate-50 p-6 dark:border-slate-700 dark:bg-slate-950">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
+                Product images
+              </h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                First image becomes the thumbnail. Drag cards to reorder. Up to {MAX_IMAGES} images.
+              </p>
+            </div>
+            <label className="inline-flex cursor-pointer items-center gap-2 rounded-2xl bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark transition-colors">
+              <Upload className="h-4 w-4" />
+              Add images
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={ACCEPTED_ACCEPT}
+                multiple
+                className="hidden"
+                onChange={handleImageChange}
+              />
+            </label>
+          </div>
+
+          {/* Hidden replace input */}
+          <input
+            ref={replaceInputRef}
+            type="file"
+            accept={ACCEPTED_ACCEPT}
+            className="hidden"
+            onChange={handleReplaceChange}
+          />
+
+          {/* Drop zone wrapper */}
+          <div
+            onDragOver={handleZoneDragOver}
+            onDragLeave={handleZoneDragLeave}
+            onDrop={handleZoneDrop}
+            className={`relative rounded-2xl border-2 border-dashed transition-colors ${isDragOver
+                ? 'border-primary bg-primary/5 dark:bg-primary/10'
+                : 'border-slate-300 dark:border-slate-600'
+              }`}
+          >
+            {previews.length === 0 ? (
+              <div className="flex h-28 flex-col items-center justify-center gap-2">
+                <ImageIcon className="h-6 w-6 text-slate-400 dark:text-slate-500" />
+                <p className="text-sm text-slate-400 dark:text-slate-500">
+                  {isDragOver
+                    ? 'Drop images here'
+                    : 'Drag & drop images here, or click "Add images" above'}
                 </p>
               </div>
-              <label className="inline-flex cursor-pointer items-center gap-2 rounded-2xl bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark transition-colors">
-                <Upload className="h-4 w-4" />
-                Add images
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept={ACCEPTED_ACCEPT}
-                  multiple
-                  className="hidden"
-                  onChange={handleImageChange}
-                />
-              </label>
-            </div>
-
-            {/* Hidden replace input */}
-            <input
-              ref={replaceInputRef}
-              type="file"
-              accept={ACCEPTED_ACCEPT}
-              className="hidden"
-              onChange={handleReplaceChange}
-            />
-
-            {/* Drop zone wrapper */}
-            <div
-              onDragOver={handleZoneDragOver}
-              onDragLeave={handleZoneDragLeave}
-              onDrop={handleZoneDrop}
-              className={`relative rounded-2xl border-2 border-dashed transition-colors ${
-                isDragOver
-                  ? 'border-primary bg-primary/5 dark:bg-primary/10'
-                  : 'border-slate-300 dark:border-slate-600'
-              }`}
-            >
-              {previews.length === 0 ? (
-                <div className="flex h-28 flex-col items-center justify-center gap-2">
-                  <ImageIcon className="h-6 w-6 text-slate-400 dark:text-slate-500" />
-                  <p className="text-sm text-slate-400 dark:text-slate-500">
-                    {isDragOver
-                      ? 'Drop images here'
-                      : 'Drag & drop images here, or click "Add images" above'}
-                  </p>
-                </div>
-              ) : (
-                <div className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                  {previews.map(({ file, url }, i) => (
-                    <div
-                      key={`${file.name}-${i}`}
-                      draggable
-                      onDragStart={(e) => handleCardDragStart(e, i)}
-                      onDragOver={(e) => handleCardDragOver(e, i)}
-                      onDragEnd={handleCardDragEnd}
-                      className={`group relative overflow-hidden rounded-2xl border bg-white transition-opacity dark:bg-slate-900 ${
-                        dragItemIndex === i
-                          ? 'border-primary opacity-50'
-                          : 'border-slate-200 dark:border-slate-700'
+            ) : (
+              <div className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {previews.map(({ file, url }, i) => (
+                  <div
+                    key={`${file.name}-${i}`}
+                    draggable
+                    onDragStart={(e) => handleCardDragStart(e, i)}
+                    onDragOver={(e) => handleCardDragOver(e, i)}
+                    onDragEnd={handleCardDragEnd}
+                    className={`group relative overflow-hidden rounded-2xl border bg-white transition-opacity dark:bg-slate-900 ${dragItemIndex === i
+                        ? 'border-primary opacity-50'
+                        : 'border-slate-200 dark:border-slate-700'
                       }`}
-                    >
-                      {/* Thumbnail / Gallery badge */}
-                      <span
-                        className={`absolute left-2 top-2 z-10 rounded-full px-2 py-0.5 text-xs font-semibold shadow ${
-                          i === 0
-                            ? 'bg-primary text-white'
-                            : 'bg-black/40 text-white'
+                  >
+                    {/* Thumbnail / Gallery badge */}
+                    <span
+                      className={`absolute left-2 top-2 z-10 rounded-full px-2 py-0.5 text-xs font-semibold shadow ${i === 0
+                          ? 'bg-primary text-white'
+                          : 'bg-black/40 text-white'
                         }`}
-                      >
-                        {i === 0 ? 'Thumbnail' : 'Gallery'}
+                    >
+                      {i === 0 ? 'Thumbnail' : 'Gallery'}
+                    </span>
+
+                    {/* Drag handle */}
+                    <div className="absolute right-2 top-2 z-10 cursor-grab rounded-full bg-black/30 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100">
+                      <GripVertical className="h-3.5 w-3.5" />
+                    </div>
+
+                    <Image
+                      src={url}
+                      alt={file.name}
+                      width={300}
+                      height={200}
+                      className="h-36 w-full object-cover"
+                    />
+
+                    <div className="flex items-center justify-between gap-1 border-t border-slate-200 px-2 py-2 dark:border-slate-700">
+                      <span className="truncate text-xs text-slate-500 dark:text-slate-400">
+                        {file.name}
                       </span>
-
-                      {/* Drag handle */}
-                      <div className="absolute right-2 top-2 z-10 cursor-grab rounded-full bg-black/30 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100">
-                        <GripVertical className="h-3.5 w-3.5" />
-                      </div>
-
-                      <Image
-                        src={url}
-                        alt={file.name}
-                        width={300}
-                        height={200}
-                        className="h-36 w-full object-cover"
-                      />
-
-                      <div className="flex items-center justify-between gap-1 border-t border-slate-200 px-2 py-2 dark:border-slate-700">
-                        <span className="truncate text-xs text-slate-500 dark:text-slate-400">
-                          {file.name}
-                        </span>
-                        <div className="flex flex-shrink-0 items-center gap-0.5">
-                          <button
-                            type="button"
-                            title="Replace image"
-                            onClick={() => triggerReplace(i)}
-                            className="rounded-full p-1.5 text-slate-500 hover:bg-slate-100 transition-colors dark:hover:bg-slate-800"
-                          >
-                            <RefreshCw className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            title="Remove image"
-                            onClick={() => removeImage(i)}
-                            className="rounded-full p-1.5 text-rose-600 hover:bg-rose-50 transition-colors dark:hover:bg-rose-950/30"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
+                      <div className="flex flex-shrink-0 items-center gap-0.5">
+                        <button
+                          type="button"
+                          title="Replace image"
+                          onClick={() => triggerReplace(i)}
+                          className="rounded-full p-1.5 text-slate-500 hover:bg-slate-100 transition-colors dark:hover:bg-slate-800"
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          title="Remove image"
+                          onClick={() => removeImage(i)}
+                          className="rounded-full p-1.5 text-rose-600 hover:bg-rose-50 transition-colors dark:hover:bg-rose-950/30"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
+                  </div>
+                ))}
+              </div>
+            )}
 
-              {/* Drag-over overlay */}
-              {isDragOver && (
-                <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-2xl">
-                  <span className="rounded-2xl bg-primary px-4 py-2 text-sm font-semibold text-white shadow-lg">
-                    Drop to add
-                  </span>
-                </div>
-              )}
-            </div>
-
-            <p className="text-xs text-slate-400 dark:text-slate-500">
-              JPEG, PNG, WebP, GIF · Max 10 MB per file · Up to {MAX_IMAGES} images
-            </p>
+            {/* Drag-over overlay */}
+            {isDragOver && (
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-2xl">
+                <span className="rounded-2xl bg-primary px-4 py-2 text-sm font-semibold text-white shadow-lg">
+                  Drop to add
+                </span>
+              </div>
+            )}
           </div>
-        )}
+
+          <p className="text-xs text-slate-400 dark:text-slate-500">
+            JPEG, PNG, WebP, GIF · Max 10 MB per file · Up to {MAX_IMAGES} images
+          </p>
+        </div>
+      )}
 
       {/* ── Core fields ── */}
       <div className="grid gap-6 lg:grid-cols-2">

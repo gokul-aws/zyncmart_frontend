@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
@@ -24,7 +24,7 @@ export function useAdminOrders(filters: AdminOrderFilters) {
     queryKey: ['admin', 'orders', filters],
     queryFn: () => fetchAdminOrders(filters),
     staleTime: 60_000,
-    keepPreviousData: true,
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -41,7 +41,7 @@ export function useUpdateAdminOrderStatus() {
   const router = useRouter();
 
   return useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: { status?: OrderStatus; tracking?: { carrier: string; trackingNumber: string; url: string }; paymentStatus?: PaymentStatus } }) =>
+    mutationFn: ({ id, payload }: { id: string; payload: { status?: OrderStatus; tracking?: { carrier?: string; trackingNumber?: string; url?: string }; paymentStatus?: PaymentStatus } }) =>
       updateAdminOrderStatus(id, payload),
     onSuccess: (order) => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'orders'] });

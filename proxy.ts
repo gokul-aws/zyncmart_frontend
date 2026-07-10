@@ -6,7 +6,7 @@ const ADMIN_PROTECTED = ['/admin'];
 const AUTH_ONLY = ['/login', '/register', '/forgot-password'];
 const ADMIN_AUTH_ONLY = ['/admin/login'];
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (pathname === '/admin') {

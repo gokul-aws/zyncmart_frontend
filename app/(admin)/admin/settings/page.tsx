@@ -51,9 +51,9 @@ export default function AdminSettingsPage() {
         </div>
 
         <AdminSettingsForm
-          settings={memoizedSettings}
-          saving={updateSettingsMutation.isLoading}
-          onSubmit={(payload) => updateSettingsMutation.mutate(payload)}
+          settings={memoizedSettings!}
+          saving={updateSettingsMutation.isPending}
+          onSubmit={(payload: any) => updateSettingsMutation.mutate(payload)}
         />
       </div>
     </AdminPageShell>

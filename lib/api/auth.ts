@@ -56,6 +56,10 @@ export async function resetPassword(email: string, otp: string, password: string
   await api.post('/auth/reset-password', { email, otp, password });
 }
 
+export async function changePassword(payload: { currentPassword: string; newPassword: string }): Promise<void> {
+  await api.patch('/auth/change-password', payload);
+}
+
 export async function fetchMe(): Promise<User> {
   const { data } = await api.get('/users/me');
   return data.data as User;

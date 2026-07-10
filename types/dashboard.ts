@@ -89,6 +89,7 @@ export interface DashboardStats {
   };
   revenue: DashboardRevenue;
   orderStatusCounts: Record<string, number>;
+  topSellingProducts: TopSellingProduct[];
   lowStockProducts: LowStockProduct[];
   recentOrders: RecentOrder[];
 }

@@ -48,7 +48,7 @@ export default function ResetPasswordClient() {
     setLoading(true);
     clearErrors();
     try {
-      await resetPassword(data.token, data.password);
+      await resetPassword(data.token, data.password, data.confirmPassword);
       setSuccess(true);
     } catch (err) {
       handleApiError(err);

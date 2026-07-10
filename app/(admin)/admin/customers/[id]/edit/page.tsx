@@ -16,7 +16,7 @@ const updateUserSchema = z.object({
   phone: z.string().min(10, 'Enter a valid phone number').optional(),
   password: z.string().min(8, 'Password must be at least 8 characters').optional(),
   role: z.enum(['user', 'admin']),
-  isActive: z.boolean(),
+  isActive: z.boolean().optional(),
 });
 
 interface EditCustomerPageProps {
