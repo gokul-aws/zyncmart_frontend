@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { CheckCircle2 } from 'lucide-react';
 import { useCartStore } from '@/lib/store/cartStore';
+import { useBuyNowStore } from '@/lib/store/buyNowStore';
 import { useAuthStore } from '@/lib/store/authStore';
 import { useRazorpay } from '@/hooks/useRazorpay';
 import { createOrder, cartItemsToOrderItems } from '@/lib/api/orders';
@@ -25,10 +26,20 @@ const STEPS: Step[] = ['address', 'payment'];
 
 export default function CheckoutClient() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const isBuyNow = searchParams.get('buyNow') === 'true';
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  const items = useCartStore((s) => s.items);
-  const getSummary = useCartStore((s) => s.getSummary);
-  const clearCart = useCartStore((s) => s.clearCart);
+
+  const cartItems = useCartStore((s) => s.items);
+  const cartGetSummary = useCartStore((s) => s.getSummary);
+  const cartClear = useCartStore((s) => s.clearCart);
+  const buyNowItems = useBuyNowStore((s) => s.items);
+  const buyNowGetSummary = useBuyNowStore((s) => s.getSummary);
+  const buyNowClear = useBuyNowStore((s) => s.clear);
+
+  const items = isBuyNow ? buyNowItems : cartItems;
+  const getSummary = isBuyNow ? buyNowGetSummary : cartGetSummary;
+  const clearCheckoutItems = isBuyNow ? buyNowClear : cartClear;
   const { initiatePayment } = useRazorpay();
 
   const [currentStep, setCurrentStep] = useState<Step>('address');
@@ -73,13 +84,13 @@ export default function CheckoutClient() {
     }
 
     if (paymentMethod === 'cod') {
-      clearCart();
+      clearCheckoutItems();
       router.push(`/checkout/success?orderId=${order._id}`);
       return;
     }
 
     try {
-      await initiatePayment(order._id, order.orderNumber);
+      await initiatePayment(order._id, order.orderNumber, clearCheckoutItems, shippingAddress.phone);
     } catch {
       // errors are toasted inside initiatePayment; order already created
     }

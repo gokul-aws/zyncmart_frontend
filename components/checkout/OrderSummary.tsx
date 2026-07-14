@@ -1,12 +1,22 @@
 'use client';
 
 import Image from 'next/image';
+import { useSearchParams } from 'next/navigation';
 import { useCartStore } from '@/lib/store/cartStore';
+import { useBuyNowStore } from '@/lib/store/buyNowStore';
 import { formatPrice } from '@/lib/formatters';
 
 export default function OrderSummary() {
-  const items = useCartStore((s) => s.items);
-  const getSummary = useCartStore((s) => s.getSummary);
+  const searchParams = useSearchParams();
+  const isBuyNow = searchParams.get('buyNow') === 'true';
+
+  const cartItems = useCartStore((s) => s.items);
+  const cartGetSummary = useCartStore((s) => s.getSummary);
+  const buyNowItems = useBuyNowStore((s) => s.items);
+  const buyNowGetSummary = useBuyNowStore((s) => s.getSummary);
+
+  const items = isBuyNow ? buyNowItems : cartItems;
+  const getSummary = isBuyNow ? buyNowGetSummary : cartGetSummary;
   const { subtotal, shipping, total } = getSummary();
 
   return (

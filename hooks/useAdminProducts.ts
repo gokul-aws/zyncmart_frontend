@@ -21,6 +21,16 @@ import type {
   ProductUpdatePayload,
 } from '@/types/product';
 
+/** Invalidate all storefront query caches that display product data. */
+function invalidateStorefrontQueries(qc: ReturnType<typeof useQueryClient>, slug?: string) {
+  qc.invalidateQueries({ queryKey: ['products'] });
+  qc.invalidateQueries({ queryKey: ['product-search'] });
+  qc.invalidateQueries({ queryKey: ['wishlist-products'] });
+  if (slug) {
+    qc.invalidateQueries({ queryKey: ['product', slug] });
+  }
+}
+
 export function useAdminProducts(filters: ProductFilters) {
   return useQuery({
     queryKey: ['admin', 'products', filters],
@@ -46,6 +56,7 @@ export function useCreateAdminProduct() {
     mutationFn: (payload: ProductCreatePayload) => createProduct(payload),
     onSuccess: (product) => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'products'] });
+      invalidateStorefrontQueries(queryClient, product.slug);
       toast.success('Product created successfully.');
       router.push(`/admin/products/${product.slug}`);
     },
@@ -64,6 +75,7 @@ export function useUpdateAdminProduct() {
     onSuccess: (product) => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'products'] });
       queryClient.invalidateQueries({ queryKey: ['admin', 'product', product.slug] });
+      invalidateStorefrontQueries(queryClient, product.slug);
       toast.success('Product updated successfully.');
     },
     onError: (error: any) => {
@@ -80,6 +92,7 @@ export function useDeleteAdminProduct() {
     mutationFn: (id: string) => deleteProduct(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'products'] });
+      invalidateStorefrontQueries(queryClient);
       toast.success('Product deleted successfully.');
       router.push('/admin/products');
     },
@@ -96,6 +109,7 @@ export function useBulkDeleteAdminProducts() {
     mutationFn: (ids: string[]) => Promise.all(ids.map((id) => deleteProduct(id))),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'products'] });
+      invalidateStorefrontQueries(queryClient);
       toast.success('Selected products deleted successfully.');
     },
     onError: (error: any) => {
@@ -113,6 +127,7 @@ export function useToggleAdminProductStatus() {
     onSuccess: (product) => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'products'] });
       queryClient.invalidateQueries({ queryKey: ['admin', 'product', product.slug] });
+      invalidateStorefrontQueries(queryClient, product.slug);
       toast.success('Product visibility updated.');
     },
     onError: (error: any) => {
@@ -137,6 +152,7 @@ export function useUploadAdminProductImages(productSlug: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'product', productSlug] });
       queryClient.invalidateQueries({ queryKey: ['admin', 'products'] });
+      invalidateStorefrontQueries(queryClient, productSlug);
       toast.success('Product images uploaded successfully.');
     },
     onError: (error: any) => {
@@ -154,6 +170,7 @@ export function useDeleteAdminProductImage(productSlug: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'product', productSlug] });
       queryClient.invalidateQueries({ queryKey: ['admin', 'products'] });
+      invalidateStorefrontQueries(queryClient, productSlug);
       toast.success('Image removed successfully.');
     },
     onError: (error: any) => {
@@ -180,6 +197,7 @@ export function useUploadAdminVariantImages(productSlug: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'product', productSlug] });
       queryClient.invalidateQueries({ queryKey: ['admin', 'products'] });
+      invalidateStorefrontQueries(queryClient, productSlug);
       toast.success('Color variant images uploaded successfully.');
     },
     onError: (error: any) => {
@@ -204,6 +222,7 @@ export function useDeleteAdminVariantImage(productSlug: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'product', productSlug] });
       queryClient.invalidateQueries({ queryKey: ['admin', 'products'] });
+      invalidateStorefrontQueries(queryClient, productSlug);
       toast.success('Image removed successfully.');
     },
     onError: (error: any) => {

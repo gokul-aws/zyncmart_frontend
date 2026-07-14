@@ -66,7 +66,16 @@ export default function CartItem({ item, compact = false }: CartItemProps) {
           </div>
 
           {compact ? (
-            <span className="text-xs text-gray-500">Qty: {item.quantity}</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500">Qty: {item.quantity}</span>
+              <button
+                onClick={() => removeItem(item.productId, item.variant, item.variantId)}
+                aria-label="Remove item"
+                className="p-1 text-gray-400 hover:text-error transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
           ) : (
             <div className="flex items-center gap-2">
               <QuantitySelector

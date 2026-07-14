@@ -23,6 +23,7 @@ import ProductColorSelector from './ProductColorSelector';
 import QuantitySelector from '@/components/ui/QuantitySelector';
 import ProductShare from './ProductShare';
 import { useCartStore } from '@/lib/store/cartStore';
+import { useBuyNowStore } from '@/lib/store/buyNowStore';
 import { useWishlistStore } from '@/lib/store/wishlistStore';
 import { GA } from '@/lib/analytics';
 import type { Product, ColorVariant } from '@/types/product';
@@ -42,6 +43,7 @@ export default function ProductInfo({
 }: ProductInfoProps) {
   const router = useRouter();
   const { addItem, toggleDrawer } = useCartStore();
+  const setBuyNowItems = useBuyNowStore((s) => s.setItems);
   const { hasItem, toggleItem } = useWishlistStore();
 
   // Resolved from the selected color variant, falling back to the product's
@@ -110,8 +112,8 @@ export default function ProductInfo({
 
   const handleBuyNow = () => {
     if (outOfStock) return;
-    addItem(buildCartItem());
-    router.push('/checkout');
+    setBuyNowItems([buildCartItem()]);
+    router.push('/checkout?buyNow=true');
   };
 
   const handleWishlist = () => {
@@ -149,8 +151,8 @@ export default function ProductInfo({
       </div>
 
       {/* Product name */}
-      <h1 className="text-2xl md:text-3xl font-bold text-gray-900 leading-snug tracking-tight font-display">
-        {product.name}
+      <h1 className="text-2xl md:text-3xl font-bold text-gray-900 leading-snug tracking-tight [font-family:Arial,sans-serif]">
+      {product.name}
       </h1>
 
       {/* Rating */}
@@ -251,7 +253,7 @@ export default function ProductInfo({
       </div>
 
       {/* Delivery + Pincode check */}
-      <div className="border border-gray-200 rounded-xl p-4 flex flex-col gap-3 bg-gray-50">
+      {/* <div className="border border-gray-200 rounded-xl p-4 flex flex-col gap-3 bg-gray-50">
         <div className="flex items-center gap-2 text-sm text-gray-600">
           <Truck className="w-4 h-4 text-primary shrink-0" />
           <span>Free delivery on orders above ₹999</span>
@@ -287,7 +289,7 @@ export default function ProductInfo({
             {pincodeMsg.text}
           </p>
         )}
-      </div>
+      </div> */}
 
       {/* Return policy */}
       <div className="flex items-center gap-2 text-sm text-gray-500">

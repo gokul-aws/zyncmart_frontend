@@ -21,4 +21,5 @@ export interface User {
   isActive?: boolean;
   addresses: Address[];
   createdAt: string;
+  razorpayCustomerId?: string;
 }

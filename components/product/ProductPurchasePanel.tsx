@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import type { Product, ColorVariant } from '@/types/product';
+import { useSyncedColorVariant } from '@/hooks/useProduct';
+import type { Product } from '@/types/product';
 import ProductImageGallery from './ProductImageGallery';
 import ProductInfo from './ProductInfo';
 
@@ -14,13 +15,19 @@ interface ProductPurchasePanelProps {
 // without a page reload. Falls back to the product's own images/price/stock
 // when there are no color variants (legacy products).
 export default function ProductPurchasePanel({ product }: ProductPurchasePanelProps) {
-  const [selectedColorVariant, setSelectedColorVariant] = useState<ColorVariant | null>(
-    product.colorVariants?.[0] ?? null
+  const [selectedColorVariantId, setSelectedColorVariantId] = useState<string | null>(
+    product.colorVariants?.[0]?._id ?? null
+  );
+
+  const { activeProduct, selectedColorVariant } = useSyncedColorVariant(
+    product,
+    selectedColorVariantId,
+    setSelectedColorVariantId
   );
 
   const activeImages = selectedColorVariant?.images?.length
     ? selectedColorVariant.images
-    : product.images;
+    : activeProduct.images;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12 mb-12">
@@ -28,14 +35,14 @@ export default function ProductPurchasePanel({ product }: ProductPurchasePanelPr
         <ProductImageGallery
           key={selectedColorVariant?._id ?? 'default'}
           images={activeImages}
-          productName={product.name}
+          productName={activeProduct.name}
         />
       </div>
 
       <ProductInfo
-        product={product}
+        product={activeProduct}
         selectedColorVariant={selectedColorVariant}
-        onColorChange={setSelectedColorVariant}
+        onColorChange={(variant) => setSelectedColorVariantId(variant._id ?? null)}
       />
     </div>
   );

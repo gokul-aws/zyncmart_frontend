@@ -24,6 +24,7 @@ interface RazorpayOptions {
   prefill?: { name?: string; email?: string; contact?: string };
   theme?: { color?: string };
   modal?: { ondismiss?: () => void };
+  customer_id?: string;
 }
 
 interface RazorpayInstance {
@@ -45,7 +46,12 @@ export function useRazorpay() {
   const user = useAuthStore((s) => s.user);
   const clearCart = useCartStore((s) => s.clearCart);
 
-  const initiatePayment = async (orderId: string, orderNumber: string) => {
+  const initiatePayment = async (
+    orderId: string,
+    orderNumber: string,
+    onPaymentSuccess?: () => void,
+    phone?: string
+  ) => {
     if (typeof window === 'undefined' || !window.Razorpay) {
       toast.error('Payment gateway not loaded. Please refresh and try again.');
       return;
@@ -78,7 +84,7 @@ export function useRazorpay() {
               razorpayPaymentId: response.razorpay_payment_id,
               razorpaySignature: response.razorpay_signature,
             });
-            clearCart();
+            (onPaymentSuccess ?? clearCart)();
             router.push(`/checkout/success?orderId=${orderId}`);
             resolve();
           } catch {
@@ -89,8 +95,9 @@ export function useRazorpay() {
         prefill: {
           name: user?.name,
           email: user?.email,
-          contact: user?.phone,
+          contact: phone || user?.phone || '',
         },
+        ...(user?.razorpayCustomerId ? { customer_id: user.razorpayCustomerId } : {}),
         theme: { color: '#1565d8' },
         modal: {
           ondismiss: () => {
