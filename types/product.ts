@@ -4,14 +4,28 @@ export interface ProductImage {
   isPrimary: boolean;
 }
 
+// ── Legacy generic option-group variant (display-only, no price/stock) ──────
 export interface ProductVariant {
   name: string;
   options: string[];
 }
 
-// A true per-color variant: its own images, stock, SKU, and an optional
-// price override. Distinct from ProductVariant above, which is just a
-// generic option-group label (e.g. Size) with no price/stock/image of its own.
+// ── Backend variant (matches productVariantSchema) ──────────────────────────
+export interface BackendProductVariant {
+  _id?: string;
+  sku: string;
+  color: {
+    name: string;
+    code?: string;
+  };
+  size?: string;
+  price: number;
+  originalPrice?: number;
+  stock: number;
+  image?: string;
+}
+
+// ── Legacy per-color variant (pre productType redesign) ─────────────────────
 export interface ColorVariant {
   _id?: string;
   color: string;
@@ -20,11 +34,9 @@ export interface ColorVariant {
   stock: number;
   sku: string;
   price?: number;
+  originalPrice?: number;
 }
 
-// The subset of ColorVariant fields the admin form submits — images are
-// managed independently via uploadVariantImages, mirroring how top-level
-// product images are handled outside the create/update payload.
 export interface ColorVariantInput {
   _id?: string;
   color: string;
@@ -34,8 +46,36 @@ export interface ColorVariantInput {
   price?: number;
 }
 
+// ── Variable product variant (admin form input shape) ───────────────────────
+export type ProductType = 'simple' | 'variable';
+
+export interface VariableProductVariant {
+  _id?: string;
+  sku: string;
+  color: string;
+  colorCode?: string;
+  size: string;
+  price: number;
+  originalPrice?: number;
+  stock: number;
+  image?: string;
+}
+
+export interface VariableProductVariantInput {
+  _id?: string;
+  sku: string;
+  color: { name: string; code: string };
+  size: string;
+  price: number;
+  originalPrice?: number;
+  stock: number;
+}
+
+// ── Product ─────────────────────────────────────────────────────────────────
+
 export interface Product {
   _id: string;
+  productType?: ProductType;
   name: string;
   slug: string;
   description: string;
@@ -44,13 +84,18 @@ export interface Product {
   brand?: string;
   sku: string;
   price: number;
+  originalPrice?: number;
   comparePrice?: number;
   stock: number;
   lowStockThreshold: number;
   weight?: number;
   images: ProductImage[];
-  variants: ProductVariant[];
-  colorVariants: ColorVariant[];
+  // Backend canonical variants (for variable products)
+  variants: BackendProductVariant[];
+  // Legacy fields (may still exist for old products)
+  colorVariants?: ColorVariant[];
+  // Legacy generic option groups
+  legacyVariants?: ProductVariant[];
   tags: string[];
   isFeatured: boolean;
   isActive: boolean;
@@ -61,20 +106,22 @@ export interface Product {
 }
 
 export interface ProductCreatePayload {
+  productType?: ProductType;
   name: string;
   slug?: string;
   description: string;
   shortDescription: string;
   categoryId: string;
   brand?: string;
-  sku: string;
-  price: number;
+  sku?: string;
+  price?: number;
+  originalPrice?: number;
   comparePrice?: number;
-  stock: number;
-  lowStockThreshold: number;
+  stock?: number;
+  lowStockThreshold?: number;
   weight?: number;
-  variants?: ProductVariant[];
-  colorVariants: ColorVariantInput[];
+  // New variable variants (sent as variableVariants to backend)
+  variableVariants?: VariableProductVariantInput[];
   tags?: string[];
   isFeatured?: boolean;
   isActive?: boolean;

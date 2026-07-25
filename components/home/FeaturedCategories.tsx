@@ -15,7 +15,7 @@ export default function FeaturedCategories({ categories }: FeaturedCategoriesPro
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">Shop by Category</h2>
           <Link
-            href="/products"
+            href="/categories"
             className="text-sm font-medium text-primary hover:opacity-80 transition-opacity"
           >
             View all

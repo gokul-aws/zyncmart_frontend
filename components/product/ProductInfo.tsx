@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'sonner';
@@ -26,7 +26,7 @@ import { useCartStore } from '@/lib/store/cartStore';
 import { useBuyNowStore } from '@/lib/store/buyNowStore';
 import { useWishlistStore } from '@/lib/store/wishlistStore';
 import { GA } from '@/lib/analytics';
-import type { Product, ColorVariant } from '@/types/product';
+import type { Product, ColorVariant, BackendProductVariant } from '@/types/product';
 
 const WHATSAPP = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER;
 
@@ -52,13 +52,35 @@ export default function ProductInfo({
     ? selectedColorVariant.images
     : product.images;
   const primaryImage = activeImages.find((i) => i.isPrimary) ?? activeImages[0];
-  const activePrice = selectedColorVariant?.price ?? product.price;
+  // For variable products, use the first variant's price as default
+  const isVariable = product.productType === 'variable';
+  const defaultVariantPrice = isVariable && product.variants?.length
+    ? product.variants[0].price
+    : product.price;
+  const activePrice = selectedColorVariant?.price ?? defaultVariantPrice;
   const activeStock = selectedColorVariant ? selectedColorVariant.stock : product.stock;
-  const activeSku = selectedColorVariant?.sku ?? product.sku;
+  const activeSku = selectedColorVariant?.sku ?? (isVariable && product.variants?.length ? product.variants[0].sku : product.sku);
+  const activeOriginalPrice = selectedColorVariant
+    ? selectedColorVariant.originalPrice
+    : (isVariable && product.variants?.length ? product.variants[0].originalPrice : product.originalPrice ?? product.comparePrice);
 
-  // Variant state: default to first option of each (non-color) variant group
+  // Derive variant groups (e.g. Size options) from backend variants for
+  // the non-color dimension selector.
+  const variantGroups = useMemo(() => {
+    if (!isVariable || !product.variants?.length) return [];
+    const sizeSet = new Set<string>();
+    for (const v of product.variants) {
+      if (v.size) sizeSet.add(v.size);
+    }
+    const groups: { name: string; options: string[] }[] = [];
+    if (sizeSet.size > 1) {
+      groups.push({ name: 'Size', options: Array.from(sizeSet) });
+    }
+    return groups;
+  }, [isVariable, product.variants]);
+
   const [selected, setSelected] = useState<Record<string, string>>(() =>
-    Object.fromEntries(product.variants.map((v) => [v.name, v.options[0] ?? '']))
+    Object.fromEntries(variantGroups.map((g) => [g.name, g.options[0] ?? '']))
   );
   const [quantity, setQuantity] = useState(1);
   const [pincode, setPincode] = useState('');
@@ -91,7 +113,7 @@ export default function ProductInfo({
     name: product.name,
     image: primaryImage?.url ?? '',
     price: activePrice,
-    comparePrice: product.comparePrice,
+    comparePrice: activeOriginalPrice,
     stock: activeStock,
     quantity,
     variant: variantLabel,
@@ -165,7 +187,7 @@ export default function ProductInfo({
       )}
 
       {/* Price */}
-      <PriceDisplay price={activePrice} comparePrice={product.comparePrice} size="lg" />
+      <PriceDisplay price={activePrice} comparePrice={activeOriginalPrice} size="lg" />
 
       {/* Stock badge */}
       <div>
@@ -187,19 +209,28 @@ export default function ProductInfo({
       {/* Short description */}
       <p className="text-gray-600 text-sm leading-relaxed">{product.shortDescription}</p>
 
-      {/* Color variants */}
-      {(product.colorVariants?.length ?? 0) > 0 && onColorChange && (
+      {/* Color variants - support both legacy colorVariants and new variants */}
+      {((product.colorVariants?.length ?? 0) > 0 || (isVariable && (product.variants?.length ?? 0) > 0)) && onColorChange && (
         <ProductColorSelector
-          colorVariants={product.colorVariants}
+          colorVariants={product.colorVariants?.length ? product.colorVariants : (product.variants ?? []).filter((v) => v.color?.name).map((v) => ({
+            _id: v._id,
+            color: v.color.name,
+            colorCode: v.color.code,
+            images: v.image ? [{ url: v.image, publicId: '', isPrimary: true }] : [],
+            stock: v.stock,
+            sku: v.sku,
+            price: v.price,
+            originalPrice: v.originalPrice,
+          }))}
           selected={selectedColorVariant}
           onChange={onColorChange}
         />
       )}
 
       {/* Variants */}
-      {product.variants.length > 0 && (
+      {variantGroups.length > 0 && (
         <ProductVariants
-          variants={product.variants}
+          variants={variantGroups}
           selected={selected}
           onChange={(name, option) => setSelected((prev) => ({ ...prev, [name]: option }))}
         />

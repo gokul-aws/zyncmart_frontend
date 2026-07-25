@@ -24,26 +24,56 @@ export default function ProductCard({ product, view = 'grid', priority = false }
   const addItem = useCartStore((state) => state.addItem);
 
   const MAX_SWATCHES = 5;
+  // Support both legacy colorVariants and new variants format
   const colorVariants = product.colorVariants ?? [];
-  const visibleColors = colorVariants.slice(0, MAX_SWATCHES);
-  const extraColorCount = colorVariants.length - visibleColors.length;
+  const backendVariants = product.variants ?? [];
+  const hasColorVariants = colorVariants.length > 0 || backendVariants.length > 0;
+  // For swatches, use legacy colorVariants if available, otherwise map from backend variants
+  const swatchColors = colorVariants.length > 0
+    ? colorVariants
+    : backendVariants.filter((v) => v.color?.name).map((v) => ({
+        _id: v._id,
+        color: v.color.name,
+        colorCode: v.color.code,
+        images: [] as Product['images'],
+        stock: v.stock,
+        sku: v.sku,
+        price: v.price,
+      }));
+  const visibleColors = swatchColors.slice(0, MAX_SWATCHES);
+  const extraColorCount = swatchColors.length - visibleColors.length;
+
+  // Determine price range for variable products
+  const isVariable = product.productType === 'variable';
+  const minPrice = isVariable && backendVariants.length > 0
+    ? Math.min(...backendVariants.map((v) => v.price))
+    : product.price;
+  const maxPrice = isVariable && backendVariants.length > 0
+    ? Math.max(...backendVariants.map((v) => v.price))
+    : product.price;
+  const displayComparePrice = isVariable && backendVariants.length > 0
+    ? backendVariants.reduce((max, v) => Math.max(max, v.originalPrice ?? 0), 0) || undefined
+    : product.originalPrice ?? product.comparePrice;
 
   // Defaults to the first color variant; hovering a swatch previews that
   // color's image instead, without navigating away from the listing.
   const [hoveredColorIndex, setHoveredColorIndex] = useState<number | null>(null);
-  const activeVariant = colorVariants[hoveredColorIndex ?? 0] ?? null;
+  const activeVariant = swatchColors[hoveredColorIndex ?? 0] ?? null;
 
+  // Get image from active variant or backend variants
+  const variantImage = backendVariants.find((v) => v.image)?.image;
   const primaryImage =
     activeVariant?.images?.find((i) => i.isPrimary)?.url ??
     activeVariant?.images?.[0]?.url ??
+    variantImage ??
     product.images.find((i) => i.isPrimary)?.url ??
     product.images[0]?.url;
 
-  const hasDiscount = product.comparePrice && product.comparePrice > product.price;
+  const hasDiscount = displayComparePrice && displayComparePrice > minPrice;
   const isLowStock = product.stock > 0 && product.stock <= product.lowStockThreshold;
   const isOutOfStock = product.stock === 0;
 
-  const ColorSwatches = colorVariants.length > 0 && (
+  const ColorSwatches = swatchColors.length > 0 && (
     <div className="flex items-center gap-1 mt-1.5">
       {visibleColors.map((variant, index) => (
         <span
@@ -73,8 +103,8 @@ export default function ProductCard({ product, view = 'grid', priority = false }
       productId: product._id,
       name: product.name,
       image: primaryImage ?? '',
-      price: product.price,
-      comparePrice: product.comparePrice,
+      price: minPrice,
+      comparePrice: displayComparePrice,
       stock: product.stock,
       quantity: 1,
       slug: product.slug,
@@ -131,7 +161,7 @@ export default function ProductCard({ product, view = 'grid', priority = false }
 
   return (
     <motion.div whileHover={{ y: -4 }} transition={{ type: 'spring', stiffness: 300, damping: 20 }}>
-      <Link href={`/products/${product.slug}`} className="group block bg-white rounded-xl overflow-hidden border border-gray-100 hover:shadow-lg transition-shadow">
+      <Link href={`/products/${product.slug}`} className="group block bg-white rounded-xl overflow-hidden border border-gray-100">
         {/* Image */}
         <div className="relative aspect-[4/5] bg-gray-100 overflow-hidden">
           {primaryImage ? (
@@ -172,7 +202,7 @@ export default function ProductCard({ product, view = 'grid', priority = false }
             <button
               onClick={handleShare}
               aria-label="Share product"
-              className="p-2 rounded-full bg-white/90 text-gray-400 hover:text-primary hover:bg-white transition-all shadow-sm backdrop-blur-sm"
+              className="p-2 rounded-full bg-white/90 text-gray-400 hover:text-primary hover:bg-white transition-all backdrop-blur-sm"
             >
               <Share2 className="w-4 h-4" />
             </button>
@@ -209,7 +239,7 @@ export default function ProductCard({ product, view = 'grid', priority = false }
             <StarRating rating={product.ratings?.average ?? 0} count={product.ratings?.count ?? 0} />
           </div>
           <div className="mt-1.5">
-            <PriceDisplay price={product.price} comparePrice={product.comparePrice} size="sm" />
+            <PriceDisplay price={minPrice} comparePrice={displayComparePrice} size="sm" />
           </div>
           {ColorSwatches}
 

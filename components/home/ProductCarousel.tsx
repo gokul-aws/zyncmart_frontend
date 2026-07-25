@@ -59,13 +59,13 @@ export default function ProductCarousel({ products }: ProductCarouselProps) {
       {/* Left fade + arrow */}
       {canScrollLeft && (
         <div className="absolute left-0 top-0 bottom-2 z-10 flex items-center
-                        bg-gradient-to-r from-white via-white/80 to-transparent pr-10 hidden md:flex">
+                        pr-10 hidden md:flex">
           <button
             onClick={() => scroll('left')}
             aria-label="Scroll products left"
-            className="w-9 h-9 rounded-full bg-white shadow-md border border-gray-200
+            className="w-9 h-9 rounded-full bg-gray-100
                        flex items-center justify-center text-gray-600
-                       hover:bg-primary hover:text-white hover:border-primary transition-colors"
+                       hover:bg-primary hover:text-white transition-colors"
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
@@ -75,13 +75,13 @@ export default function ProductCarousel({ products }: ProductCarouselProps) {
       {/* Right fade + arrow */}
       {canScrollRight && (
         <div className="absolute right-0 top-0 bottom-2 z-10 flex items-center
-                        bg-gradient-to-l from-white via-white/80 to-transparent pl-10 hidden md:flex">
+                        pl-10 hidden md:flex">
           <button
             onClick={() => scroll('right')}
             aria-label="Scroll products right"
-            className="w-9 h-9 rounded-full bg-white shadow-md border border-gray-200
+            className="w-9 h-9 rounded-full bg-gray-100
                        flex items-center justify-center text-gray-600
-                       hover:bg-primary hover:text-white hover:border-primary transition-colors"
+                       hover:bg-primary hover:text-white transition-colors"
           >
             <ChevronRight className="w-5 h-5" />
           </button>

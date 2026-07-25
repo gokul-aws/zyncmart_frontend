@@ -22,6 +22,8 @@ export function useProduct(slug: string, initialData?: Product) {
  * admin price update), the variant objects in the store change identity.
  * This hook keeps the selected variant reference up-to-date and falls back
  * to the first variant when the previously-selected one no longer exists.
+ *
+ * Supports both legacy colorVariants and new backend variants format.
  */
 export function useSyncedColorVariant(
   product: Product,
@@ -31,20 +33,42 @@ export function useSyncedColorVariant(
   const { data: freshProduct } = useProduct(product.slug, product);
   const active = freshProduct ?? product;
 
+  // Map backend variants to a ColorVariant-like shape for the storefront
+  const resolvedColorVariants = (() => {
+    if (active.colorVariants?.length) return active.colorVariants;
+    if (active.variants?.length) {
+      return active.variants
+        .filter((v) => v.color?.name)
+        .map((v) => ({
+          _id: v._id,
+          color: v.color.name,
+          colorCode: v.color.code,
+          images: v.image
+            ? [{ url: v.image, publicId: '', isPrimary: true }]
+            : [],
+          stock: v.stock,
+          sku: v.sku,
+          price: v.price,
+          originalPrice: v.originalPrice,
+        }));
+    }
+    return [];
+  })();
+
   useEffect(() => {
-    if (!active.colorVariants?.length) {
+    if (!resolvedColorVariants.length) {
       if (selectedId !== null) onSelect(null);
       return;
     }
 
-    const exists = active.colorVariants.some((v) => v._id === selectedId);
+    const exists = resolvedColorVariants.some((v) => v._id === selectedId);
     if (!exists) {
-      onSelect(active.colorVariants[0]._id ?? null);
+      onSelect(resolvedColorVariants[0]._id ?? null);
     }
-  }, [active, selectedId, onSelect]);
+  }, [resolvedColorVariants, selectedId, onSelect]);
 
   const selected =
-    active.colorVariants?.find((v) => v._id === selectedId) ?? null;
+    resolvedColorVariants.find((v) => v._id === selectedId) ?? null;
 
   return { activeProduct: active, selectedColorVariant: selected };
 }

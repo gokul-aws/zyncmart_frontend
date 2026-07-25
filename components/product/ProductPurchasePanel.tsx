@@ -15,8 +15,14 @@ interface ProductPurchasePanelProps {
 // without a page reload. Falls back to the product's own images/price/stock
 // when there are no color variants (legacy products).
 export default function ProductPurchasePanel({ product }: ProductPurchasePanelProps) {
+  // Support both legacy colorVariants and new backend variants format
+  const initialVariantId = (() => {
+    if (product.colorVariants?.length) return product.colorVariants[0]._id ?? null;
+    if (product.variants?.length) return product.variants[0]._id ?? null;
+    return null;
+  })();
   const [selectedColorVariantId, setSelectedColorVariantId] = useState<string | null>(
-    product.colorVariants?.[0]?._id ?? null
+    initialVariantId
   );
 
   const { activeProduct, selectedColorVariant } = useSyncedColorVariant(

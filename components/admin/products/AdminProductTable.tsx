@@ -53,12 +53,21 @@ export default function AdminProductTable({
         <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
           {products.map((product) => {
             const isSelected = selectedIds.includes(product._id);
-            const firstVariantImages = product.colorVariants?.[0]?.images ?? [];
+            // Get primary image from variants or product images
+            const variantImage = product.variants?.[0]?.image;
             const primaryImage =
-              firstVariantImages.find((image) => image.isPrimary) ??
-              firstVariantImages[0] ??
               product.images.find((image) => image.isPrimary) ??
               product.images[0];
+            const displayImage = variantImage
+              ? { url: variantImage, publicId: '', isPrimary: true }
+              : primaryImage;
+            const isVariable = product.productType === 'variable';
+            const displayPrice = isVariable
+              ? (product.variants?.[0]?.price ?? product.price)
+              : product.price;
+            const displaySku = isVariable
+              ? (product.variants?.[0]?.sku ?? product.sku)
+              : product.sku;
 
             return (
               <tr key={product._id} className={cn(isSelected ? 'bg-slate-50 dark:bg-slate-800' : '')}>
@@ -75,9 +84,9 @@ export default function AdminProductTable({
                 <td className="px-4 py-4">
                   <div className="flex items-center gap-3">
                     <div className="relative h-14 w-14 overflow-hidden rounded-2xl bg-slate-100">
-                      {primaryImage ? (
+                      {displayImage ? (
                         <Image
-                          src={primaryImage.url}
+                          src={displayImage.url}
                           alt={product.name}
                           fill
                           className="object-cover"
@@ -93,12 +102,20 @@ export default function AdminProductTable({
                       <Link href={`/admin/products/${product.slug}`} className="font-semibold text-slate-900 hover:text-primary dark:text-white dark:hover:text-primary">
                         {product.name}
                       </Link>
-                      <p className="text-sm text-slate-500 dark:text-slate-400">{truncate(product.sku, 32)}</p>
+                      <p className="text-sm text-slate-500 dark:text-slate-400">{truncate(displaySku, 32)}</p>
+                      <Badge variant={isVariable ? 'outline' : 'success'} className="mt-1 text-[10px]">
+                        {isVariable ? 'Variable' : 'Simple'}
+                      </Badge>
                     </div>
                   </div>
                 </td>
                 <td className="px-4 py-4 text-sm text-slate-600 dark:text-slate-300">{product.category.name}</td>
-                <td className="px-4 py-4 text-sm text-slate-600 dark:text-slate-300">₹{product.price.toLocaleString()}</td>
+                <td className="px-4 py-4 text-sm text-slate-600 dark:text-slate-300">
+                  ₹{(displayPrice ?? 0).toLocaleString()}
+                  {isVariable && product.variants?.length > 1 && (
+                    <span className="ml-1 text-xs text-slate-400">({product.variants.length} variants)</span>
+                  )}
+                </td>
                 <td className="px-4 py-4 text-sm text-slate-600 dark:text-slate-300">{product.stock}</td>
                 <td className="px-4 py-4">
                   <Badge variant={product.isActive ? 'success' : 'outline'}>

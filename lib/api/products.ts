@@ -113,6 +113,27 @@ export async function removeProductImage(
   return data.data;
 }
 
+export async function reorderProductImages(
+  productId: string,
+  images: { publicId: string; isPrimary: boolean }[]
+): Promise<void> {
+  const { data } = await api.put<ApiResponse<void>>(
+    `/products/${productId}/images/reorder`,
+    { images }
+  );
+  return data.data;
+}
+
+export async function setPrimaryImage(
+  productId: string,
+  publicId: string
+): Promise<void> {
+  const { data } = await api.put<ApiResponse<void>>(
+    `/products/${productId}/images/${encodeURIComponent(publicId)}/primary`
+  );
+  return data.data;
+}
+
 export async function uploadVariantImages(
   productId: string,
   variantId: string,

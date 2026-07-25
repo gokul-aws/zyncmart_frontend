@@ -24,7 +24,7 @@ export default function ProductTabs({ product }: ProductTabsProps) {
     { label: 'Category', value: product.category.name },
     ...(product.brand ? [{ label: 'Brand', value: product.brand }] : []),
     { label: 'Availability', value: product.stock > 0 ? `In Stock (${product.stock} units)` : 'Out of Stock' },
-    ...product.variants.map((v) => ({ label: v.name, value: v.options.join(', ') })),
+    ...(product.variants?.length ? [{ label: 'Variants', value: `${product.variants.length} options available` }] : []),
     ...(product.tags.length ? [{ label: 'Tags', value: product.tags.join(', ') }] : []),
   ];
 

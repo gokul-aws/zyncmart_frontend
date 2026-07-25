@@ -199,11 +199,27 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
               <div className="mt-6 space-y-4">
                 {order.items.map((item, index) => (
                   <div key={`${item.product}-${index}`} className="rounded-3xl border border-slate-100 bg-slate-50 p-4 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200">
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
-                        <p className="font-semibold text-slate-900 dark:text-white">{item.name}</p>
+                    <div className="flex gap-4">
+                      <div className="relative shrink-0">
+                        {item.image ? (
+                          <img
+                            src={item.image}
+                            alt={item.name}
+                            className="h-20 w-20 rounded-2xl object-cover border border-slate-200 dark:border-slate-700"
+                          />
+                        ) : (
+                          <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-slate-200 text-slate-400 dark:bg-slate-800 text-xs">
+                            No image
+                          </div>
+                        )}
+                        <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[11px] font-bold text-white shadow">
+                          {item.quantity}
+                        </span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-slate-900 dark:text-white truncate">{item.name}</p>
                         {item.color && (
-                          <p className="flex items-center gap-1.5 text-sm text-slate-500">
+                          <p className="flex items-center gap-1.5 text-sm text-slate-500 mt-1">
                             {item.colorCode && (
                               <span
                                 className="h-3 w-3 rounded-full border border-black/10 shrink-0"
@@ -215,12 +231,11 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                           </p>
                         )}
                         {item.variant && <p className="text-sm text-slate-500">Variant: {item.variant}</p>}
+                        <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-slate-500 dark:text-slate-400">
+                          <span>{formatPrice(item.price)}</span>
+                          <span>Subtotal: {formatPrice(item.price * item.quantity)}</span>
+                        </div>
                       </div>
-                      <div className="text-sm text-slate-600 dark:text-slate-300">Qty {item.quantity}</div>
-                    </div>
-                    <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-slate-500 dark:text-slate-400">
-                      <span>{formatPrice(item.price)}</span>
-                      <span>Subtotal: {formatPrice(item.price * item.quantity)}</span>
                     </div>
                   </div>
                 ))}
