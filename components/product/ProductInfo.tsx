@@ -23,7 +23,6 @@ import ProductColorSelector from './ProductColorSelector';
 import QuantitySelector from '@/components/ui/QuantitySelector';
 import ProductShare from './ProductShare';
 import { useCartStore } from '@/lib/store/cartStore';
-import { useBuyNowStore } from '@/lib/store/buyNowStore';
 import { useWishlistStore } from '@/lib/store/wishlistStore';
 import { GA } from '@/lib/analytics';
 import type { Product, ColorVariant, BackendProductVariant } from '@/types/product';
@@ -43,7 +42,6 @@ export default function ProductInfo({
 }: ProductInfoProps) {
   const router = useRouter();
   const { addItem, toggleDrawer } = useCartStore();
-  const setBuyNowItems = useBuyNowStore((s) => s.setItems);
   const { hasItem, toggleItem } = useWishlistStore();
 
   // Resolved from the selected color variant, falling back to the product's
@@ -108,34 +106,25 @@ export default function ProductInfo({
   const variantLabel =
     Object.values(selected).filter(Boolean).join(' / ') || undefined;
 
-  const buildCartItem = () => ({
-    productId: product._id,
-    name: product.name,
-    image: primaryImage?.url ?? '',
-    price: activePrice,
-    comparePrice: activeOriginalPrice,
-    stock: activeStock,
-    quantity,
-    variant: variantLabel,
-    slug: product.slug,
-    variantId: selectedColorVariant?._id,
-    color: selectedColorVariant?.color,
-    colorCode: selectedColorVariant?.colorCode,
-    sku: activeSku,
-  });
+  const PLACEHOLDER_IMG = 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 200 200%22%3E%3Crect width=%22200%22 height=%22200%22 fill=%22%23f3f4f6%22/%3E%3C/svg%3E';
+  const imgUrl = primaryImage?.url || PLACEHOLDER_IMG;
 
-  const handleAddToCart = () => {
+  const handleAddToCart = async () => {
     if (outOfStock) return;
-    addItem(buildCartItem());
-    toggleDrawer();
-    toast.success('Added to cart', { description: product.name });
-    GA.addToCart(product, quantity);
+    try {
+      await addItem(product._id, quantity, selectedColorVariant?._id);
+      toggleDrawer();
+      toast.success('Added to cart', { description: product.name });
+      GA.addToCart(product, quantity);
+    } catch {
+      toast.error('Failed to add to cart. Please try again.');
+    }
   };
 
-  const handleBuyNow = () => {
+  const handleBuyNow = async () => {
     if (outOfStock) return;
-    setBuyNowItems([buildCartItem()]);
-    router.push('/checkout?buyNow=true');
+    await addItem(product._id, quantity, selectedColorVariant?._id);
+    router.push('/checkout');
   };
 
   const handleWishlist = () => {

@@ -24,6 +24,12 @@ const STEP_LABELS: Record<Step, string> = {
 
 const STEPS: Step[] = ['address', 'payment'];
 
+export interface CheckoutShipping {
+  pincode: string;
+  state: string;
+  shippingCharge: number;
+}
+
 export default function CheckoutClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -44,6 +50,11 @@ export default function CheckoutClient() {
 
   const [currentStep, setCurrentStep] = useState<Step>('address');
   const [shippingAddress, setShippingAddress] = useState<Address | null>(null);
+  const [checkoutShipping, setCheckoutShipping] = useState<CheckoutShipping>({
+    pincode: '',
+    state: '',
+    shippingCharge: 0,
+  });
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -58,7 +69,9 @@ export default function CheckoutClient() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const { subtotal, shipping, total } = getSummary();
+  const { subtotal } = getSummary();
+  const shipping = checkoutShipping.shippingCharge;
+  const total = subtotal + shipping;
   const pricing = { subtotal, discount: 0, shipping, tax: 0, total };
 
   const handleAddressContinue = (address: Address) => {
@@ -148,7 +161,11 @@ export default function CheckoutClient() {
           <div className="lg:col-span-2">
             <div className="bg-white rounded-2xl shadow-sm p-6">
               {currentStep === 'address' && (
-                <AddressStep onContinue={handleAddressContinue} />
+                <AddressStep
+                  onContinue={handleAddressContinue}
+                  onShippingChange={setCheckoutShipping}
+                  initialPincode={checkoutShipping.pincode}
+                />
               )}
               {currentStep === 'payment' && shippingAddress && (
                 <PaymentStep
@@ -163,7 +180,10 @@ export default function CheckoutClient() {
 
           <div className="lg:col-span-1">
             <div className="sticky top-6">
-              <OrderSummary />
+              <OrderSummary
+                shippingCharge={checkoutShipping.shippingCharge}
+                detectedState={checkoutShipping.state}
+              />
             </div>
           </div>
         </div>

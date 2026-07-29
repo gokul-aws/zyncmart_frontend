@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/store/authStore';
 import { useCartStore } from '@/lib/store/cartStore';
 import { login, register, verifyRegistrationOtp, resendRegistrationOtp, logout } from '@/lib/api/auth';
-import { mergeCart } from '@/lib/api/cart';
 import type { LoginPayload, RegisterPayload } from '@/lib/api/auth';
 
 interface AxiosErrorLike {
@@ -58,20 +57,8 @@ export function useAuth() {
   const router = useRouter();
 
   const { setAuth, clearAuth, user, isAuthenticated } = useAuthStore();
-  const { items, clearCart } = useCartStore();
-
-  // Shared tail of any successful auth (login or OTP-verified registration):
-  // merge the guest cart into the account's, then hard-navigate so every
-  // store/provider re-hydrates from the freshly-set auth state.
   const finishAuth = async (destination: string) => {
-    if (items.length > 0) {
-      try {
-        await mergeCart(items);
-      } catch (cartErr) {
-        console.error('Cart merge failed, continuing...', cartErr);
-      }
-    }
-    router.refresh();
+    await useCartStore.getState().loadCart();
     window.location.href = destination;
   };
 
@@ -167,7 +154,8 @@ export function useAuth() {
       console.error("Logout request failed, clearing local state anyway...", err);
     }
     clearAuth();
-    clearCart();
+    useCartStore.setState({ items: [], loading: false });
+    useCartStore.getState().loadCart();
     router.push('/');
   };
 

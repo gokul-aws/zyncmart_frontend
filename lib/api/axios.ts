@@ -3,6 +3,18 @@ import type { InternalAxiosRequestConfig } from 'axios';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
+// Stable guest ID stored in localStorage so the server can track a guest's cart
+const GUEST_ID_KEY = 'guest-id';
+function getOrCreateGuestId(): string {
+  if (typeof window === 'undefined') return '';
+  let id = localStorage.getItem(GUEST_ID_KEY);
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem(GUEST_ID_KEY, id);
+  }
+  return id;
+}
+
 const api = axios.create({
   baseURL: BASE_URL,
   headers: { 'Content-Type': 'application/json' },
@@ -10,17 +22,21 @@ const api = axios.create({
   withCredentials: true,
 });
 
-// Attach access token from authStore on every request (client-side only)
+// Attach access token / guest-id on every request (client-side only)
 api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
   if (typeof window !== 'undefined') {
+    if (!config.headers) {
+      config.headers = new AxiosHeaders();
+    }
+
+    // Always set guest-id as a default (used for guest cart tracking)
+    config.headers.set('x-guest-id', getOrCreateGuestId());
+
+    // Override with auth token if available
     const { useAuthStore } = await import('@/lib/store/authStore');
     const token: string | null = useAuthStore.getState().accessToken;
     if (token) {
-      if (!config.headers) {
-        config.headers = new AxiosHeaders();
-      }
-
-      config.headers.set("Authorization", `Bearer ${token}`);
+      config.headers.set('Authorization', `Bearer ${token}`);
     }
   }
   return config;

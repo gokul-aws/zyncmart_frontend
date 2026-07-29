@@ -20,7 +20,7 @@ export async function fetchProducts(
 
   const res = await fetch(
     `${BASE_URL}/products${params.toString() ? `?${params}` : ''}`,
-    { next: { revalidate: 3600 } }
+    filters.search ? { cache: 'no-store' } : { next: { revalidate: 3600 } }
   );
 
   if (!res.ok) throw new Error(`fetchProducts failed: ${res.status}`);

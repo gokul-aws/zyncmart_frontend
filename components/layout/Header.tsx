@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { ShoppingCart, User, Search, Heart, Menu, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useCartStore } from '@/lib/store/cartStore';
@@ -16,30 +17,15 @@ const NAV_LINKS = [
 
 function ZyncmartLogo() {
   return (
-    <Link href="/" className="flex items-center gap-2 shrink-0" aria-label="Zyncmart — Home">
-      <svg
-        width="30"
-        height="30"
-        viewBox="0 0 30 30"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        aria-hidden="true"
-      >
-        <rect width="30" height="30" rx="6" fill="#1565d8" />
-        <path
-          d="M7 8h10.5L8 18.5H18.5"
-          stroke="#ffffff"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        <circle cx="10.5" cy="23" r="1.5" fill="#4da6ff" />
-        <circle cx="17.5" cy="23" r="1.5" fill="#4da6ff" />
-      </svg>
-      <span className="text-xl font-bold leading-none tracking-tight">
-        <span className="text-primary">Zync</span>
-        <span className="text-white">mart</span>
-      </span>
+    <Link href="/" className="flex items-center shrink-0" aria-label="Zyncmart — Home">
+      <Image
+        src="/zyncmart_logo.png"
+        alt="Zyncmart"
+        width={779}
+        height={320}
+        priority
+        className="h-8 sm:h-10 md:h-12 lg:h-14 w-auto object-contain"
+      />
     </Link>
   );
 }

@@ -1,23 +1,38 @@
+export interface CartItemAttributes {
+  color?: string | null;
+  colorCode?: string | null;
+  size?: string | null;
+}
+
 export interface CartItem {
+  _id: string;
   productId: string;
   name: string;
+  slug: string | null;
   image: string;
-  price: number;
-  comparePrice?: number;
-  stock: number;
+  thumbnail: string;
+  sku: string | null;
   quantity: number;
-  variant?: string;
-  slug: string;
-  // Color variant reference, alongside the generic `variant` label above.
-  variantId?: string;
-  color?: string;
-  colorCode?: string;
-  sku?: string;
+  price: number;
+  originalPrice: number | null;
+  totalPrice: number;
+  attributes: CartItemAttributes;
+  variant: string | null;
+  stock: { sku: string; stock: number } | null;
 }
 
 export interface CartSummary {
-  itemCount: number;
+  totalItems: number;
+  totalQuantity: number;
   subtotal: number;
+  discount: number;
   shipping: number;
-  total: number;
+  tax: number;
+  grandTotal: number;
+  coupon: string | null;
+}
+
+export interface CartResponse {
+  items: CartItem[];
+  summary: CartSummary;
 }

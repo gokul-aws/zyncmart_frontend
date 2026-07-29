@@ -22,6 +22,7 @@ interface ProductCardProps {
 
 export default function ProductCard({ product, view = 'grid', priority = false }: ProductCardProps) {
   const addItem = useCartStore((state) => state.addItem);
+  const toggleDrawer = useCartStore((state) => state.toggleDrawer);
 
   const MAX_SWATCHES = 5;
   // Support both legacy colorVariants and new variants format
@@ -69,9 +70,17 @@ export default function ProductCard({ product, view = 'grid', priority = false }
     product.images.find((i) => i.isPrimary)?.url ??
     product.images[0]?.url;
 
+  const firstAvailableVariant = isVariable
+    ? backendVariants.find((v) => v.stock > 0) ?? swatchColors.find((v) => v.stock > 0) ?? null
+    : null;
+  const isOutOfStock = isVariable
+    ? !firstAvailableVariant
+    : product.stock === 0;
+
   const hasDiscount = displayComparePrice && displayComparePrice > minPrice;
-  const isLowStock = product.stock > 0 && product.stock <= product.lowStockThreshold;
-  const isOutOfStock = product.stock === 0;
+  const isLowStock = !isOutOfStock && (isVariable
+    ? (firstAvailableVariant?.stock ?? 0) <= product.lowStockThreshold
+    : product.stock > 0 && product.stock <= product.lowStockThreshold);
 
   const ColorSwatches = swatchColors.length > 0 && (
     <div className="flex items-center gap-1 mt-1.5">
@@ -94,23 +103,20 @@ export default function ProductCard({ product, view = 'grid', priority = false }
     </div>
   );
 
-  const handleAddToCart = (e: React.MouseEvent) => {
+  const handleAddToCart = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     if (isOutOfStock) return;
 
-    const cartItem: CartItem = {
-      productId: product._id,
-      name: product.name,
-      image: primaryImage ?? '',
-      price: minPrice,
-      comparePrice: displayComparePrice,
-      stock: product.stock,
-      quantity: 1,
-      slug: product.slug,
-    };
-    addItem(cartItem);
-    toast.success('Added to cart', { description: product.name });
+    const defaultVariantId = firstAvailableVariant?._id ?? null;
+
+    try {
+      await addItem(product._id, 1, defaultVariantId);
+      toggleDrawer();
+      toast.success('Added to cart', { description: product.name });
+    } catch {
+      toast.error('Failed to add to cart. Please try again.');
+    }
   };
 
   const handleShare = async (e: React.MouseEvent) => {

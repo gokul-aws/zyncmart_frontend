@@ -8,14 +8,16 @@ interface SearchBarProps {
   onClose?: () => void;
   autoFocus?: boolean;
   placeholder?: string;
+  defaultValue?: string;
 }
 
 export default function SearchBar({
   onClose,
   autoFocus = false,
   placeholder = 'Search jewellery, toys, home accessories…',
+  defaultValue = '',
 }: SearchBarProps) {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(defaultValue);
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
 

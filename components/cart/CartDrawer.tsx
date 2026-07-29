@@ -11,7 +11,6 @@ export default function CartDrawer() {
   const { items, isOpen, toggleDrawer, summary } = useCart();
   const drawerRef = useRef<HTMLDivElement>(null);
 
-  // Trap focus and close on Escape
   useEffect(() => {
     if (!isOpen) return;
     const handleKey = (e: KeyboardEvent) => {
@@ -29,14 +28,12 @@ export default function CartDrawer() {
 
   return (
     <>
-      {/* Backdrop */}
       <div
         className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm"
         onClick={toggleDrawer}
         aria-hidden="true"
       />
 
-      {/* Drawer panel */}
       <div
         ref={drawerRef}
         role="dialog"
@@ -44,12 +41,11 @@ export default function CartDrawer() {
         aria-label="Shopping cart"
         className="fixed right-0 top-0 z-50 h-full w-full max-w-sm bg-white shadow-2xl flex flex-col"
       >
-        {/* Header */}
         <div className="flex items-center justify-between px-4 py-4 border-b border-gray-100">
           <div className="flex items-center gap-2">
             <ShoppingBag className="w-5 h-5 text-primary" />
             <h2 className="font-semibold text-gray-900">
-              Cart{summary.itemCount > 0 && ` (${summary.itemCount})`}
+              Cart{summary.totalQuantity > 0 && ` (${summary.totalQuantity})`}
             </h2>
           </div>
           <button
@@ -61,7 +57,6 @@ export default function CartDrawer() {
           </button>
         </div>
 
-        {/* Items */}
         <div className="flex-1 overflow-y-auto px-4 divide-y divide-gray-100">
           {items.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full gap-3 text-center py-12">
@@ -77,7 +72,7 @@ export default function CartDrawer() {
           ) : (
             items.map((item) => (
               <CartItem
-                key={`${item.productId}-${item.variantId ?? item.variant}`}
+                key={item._id}
                 item={item}
                 compact
               />
@@ -85,20 +80,29 @@ export default function CartDrawer() {
           )}
         </div>
 
-        {/* Footer */}
         {items.length > 0 && (
           <div className="border-t border-gray-100 px-4 py-4 space-y-3">
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Subtotal</span>
               <span className="font-semibold">{formatPrice(summary.subtotal)}</span>
             </div>
-            {summary.shipping === 0 ? (
+            {summary.discount > 0 && (
+              <div className="flex justify-between text-sm text-green-600">
+                <span>Discount</span>
+                <span>-{formatPrice(summary.discount)}</span>
+              </div>
+            )}
+            <div className="flex justify-between text-sm font-semibold text-gray-900">
+              <span>Total</span>
+              <span>{formatPrice(summary.grandTotal)}</span>
+            </div>
+            {/* {summary.shipping === 0 ? (
               <p className="text-xs text-success text-center font-medium">Free shipping applied!</p>
             ) : (
               <p className="text-xs text-gray-400 text-center">
                 Add {formatPrice(999 - summary.subtotal)} more for free shipping
               </p>
-            )}
+            )} */}
             <div className="grid grid-cols-2 gap-2">
               <Link
                 href="/cart"

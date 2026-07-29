@@ -106,15 +106,27 @@ export default function SuccessClient() {
                 <span>{formatPrice(order.pricing.subtotal)}</span>
               </div>
               <div className="flex justify-between text-gray-500">
-                <span>Shipping</span>
+                <span>Shipping {order.shippingAddress?.state ? `(${order.shippingAddress.state})` : ''}</span>
                 <span>
                   {order.pricing.shipping === 0
                     ? 'Free'
                     : formatPrice(order.pricing.shipping)}
                 </span>
               </div>
+              {order.pricing.discount > 0 && (
+                <div className="flex justify-between text-gray-500">
+                  <span>Discount</span>
+                  <span>-{formatPrice(order.pricing.discount)}</span>
+                </div>
+              )}
+              {order.pricing.tax > 0 && (
+                <div className="flex justify-between text-gray-500">
+                  <span>Tax</span>
+                  <span>{formatPrice(order.pricing.tax)}</span>
+                </div>
+              )}
               <div className="flex justify-between font-bold text-gray-900 text-base pt-1">
-                <span>Total</span>
+                <span>Grand Total</span>
                 <span>{formatPrice(order.pricing.total)}</span>
               </div>
             </div>

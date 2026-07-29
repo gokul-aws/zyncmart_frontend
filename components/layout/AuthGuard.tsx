@@ -16,7 +16,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!hydrated) return;
     if (!accessToken) {
-      const redirect = window.location.pathname;
+      const redirect = window.location.pathname + window.location.search;
       router.replace(`/login?redirect=${encodeURIComponent(redirect)}`);
     }
   }, [accessToken, hydrated, router]);

@@ -6,7 +6,12 @@ import { useCartStore } from '@/lib/store/cartStore';
 import { useBuyNowStore } from '@/lib/store/buyNowStore';
 import { formatPrice } from '@/lib/formatters';
 
-export default function OrderSummary() {
+interface OrderSummaryProps {
+  shippingCharge?: number;
+  detectedState?: string;
+}
+
+export default function OrderSummary({ shippingCharge, detectedState }: OrderSummaryProps) {
   const searchParams = useSearchParams();
   const isBuyNow = searchParams.get('buyNow') === 'true';
 
@@ -17,7 +22,10 @@ export default function OrderSummary() {
 
   const items = isBuyNow ? buyNowItems : cartItems;
   const getSummary = isBuyNow ? buyNowGetSummary : cartGetSummary;
-  const { subtotal, shipping, total } = getSummary();
+  const { subtotal, discount } = getSummary();
+
+  const shipping = shippingCharge ?? 0;
+  const total = subtotal - discount + shipping;
 
   return (
     <div className="bg-gray-50 rounded-xl p-6 space-y-4">
@@ -26,7 +34,7 @@ export default function OrderSummary() {
       <ul className="divide-y divide-gray-200">
         {items.map((item) => (
           <li
-            key={`${item.productId}-${item.variantId ?? item.variant ?? ''}`}
+            key={item._id}
             className="py-3 flex gap-3 items-start"
           >
             <div className="relative w-14 h-14 shrink-0 rounded-lg overflow-hidden bg-gray-100">
@@ -44,24 +52,24 @@ export default function OrderSummary() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-gray-900 line-clamp-2">{item.name}</p>
-              {item.color && (
+              {item.attributes?.color && (
                 <p className="flex items-center gap-1.5 text-xs text-gray-500 mt-0.5">
-                  {item.colorCode && (
+                  {item.attributes.colorCode && (
                     <span
                       className="h-3 w-3 rounded-full border border-black/10 shrink-0"
-                      style={{ backgroundColor: item.colorCode }}
+                      style={{ backgroundColor: item.attributes.colorCode }}
                     />
                   )}
-                  {item.color}
+                  {item.attributes.color}
                 </p>
               )}
-              {item.variant && (
-                <p className="text-xs text-gray-500 mt-0.5">{item.variant}</p>
+              {item.attributes?.size && (
+                <p className="text-xs text-gray-500 mt-0.5">{item.attributes.size}</p>
               )}
               <p className="text-xs text-gray-500 mt-0.5">Qty: {item.quantity}</p>
             </div>
             <p className="text-sm font-semibold text-gray-900 shrink-0">
-              {formatPrice(item.price * item.quantity)}
+              {formatPrice(item.totalPrice)}
             </p>
           </li>
         ))}
@@ -72,21 +80,31 @@ export default function OrderSummary() {
           <span>Subtotal</span>
           <span>{formatPrice(subtotal)}</span>
         </div>
-        <div className="flex justify-between text-gray-600">
-          <span>Shipping</span>
-          <span>{shipping === 0 ? 'Free' : formatPrice(shipping)}</span>
-        </div>
+        {discount > 0 && (
+          <div className="flex justify-between text-green-600">
+            <span>Discount</span>
+            <span>-{formatPrice(discount)}</span>
+          </div>
+        )}
+        {shippingCharge !== undefined && (
+          <>
+            <div className="flex justify-between text-gray-600">
+              <span>Shipping</span>
+              <span>{formatPrice(shipping)}</span>
+            </div>
+            {detectedState && (
+              <div className="flex justify-between text-gray-500 text-xs">
+                <span>Detected State</span>
+                <span>{detectedState}</span>
+              </div>
+            )}
+          </>
+        )}
         <div className="flex justify-between font-bold text-gray-900 text-base pt-2 border-t border-gray-200">
-          <span>Total</span>
+          <span>Grand Total</span>
           <span>{formatPrice(total)}</span>
         </div>
       </div>
-
-      {shipping > 0 && (
-        <p className="text-xs text-gray-500">
-          Add {formatPrice(999 - subtotal)} more for free shipping.
-        </p>
-      )}
     </div>
   );
 }

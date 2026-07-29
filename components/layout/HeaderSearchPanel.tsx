@@ -281,10 +281,13 @@ export default function HeaderSearchPanel({ isOpen, onClose }: Props) {
 
                             {/* Price */}
                             <div className="shrink-0 text-right">
-                              <p className="text-sm font-semibold text-slate-900">
-                                ₹{product.price.toLocaleString('en-IN')}
-                              </p>
+                              {product.price != null && (
+                                <p className="text-sm font-semibold text-slate-900">
+                                  ₹{product.price.toLocaleString('en-IN')}
+                                </p>
+                              )}
                               {product.comparePrice &&
+                                product.price != null &&
                                 product.comparePrice > product.price && (
                                   <p className="text-xs text-slate-400 line-through">
                                     ₹{product.comparePrice.toLocaleString('en-IN')}

@@ -4,9 +4,11 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { MapPin, Plus, Loader2 } from 'lucide-react';
+import { MapPin, Plus, Loader2, Truck } from 'lucide-react';
 import { useAuthStore } from '@/lib/store/authStore';
 import { fetchUserAddresses } from '@/lib/api/orders';
+import { validatePincode, lookupPincodeState, calculateShippingCharge } from '@/lib/shipping';
+import { formatPrice } from '@/lib/formatters';
 import type { Address } from '@/types/user';
 
 const INDIAN_STATES = [
@@ -32,9 +34,11 @@ type AddressFormValues = z.infer<typeof addressSchema>;
 
 interface AddressStepProps {
   onContinue: (address: Address) => void;
+  onShippingChange: (shipping: { pincode: string; state: string; shippingCharge: number }) => void;
+  initialPincode?: string;
 }
 
-export default function AddressStep({ onContinue }: AddressStepProps) {
+export default function AddressStep({ onContinue, onShippingChange, initialPincode }: AddressStepProps) {
   const user = useAuthStore((s) => s.user);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
@@ -42,19 +46,27 @@ export default function AddressStep({ onContinue }: AddressStepProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [pincodeLoading, setPincodeLoading] = useState(false);
+  const [pincodeError, setPincodeError] = useState('');
 
   const {
     register,
     handleSubmit,
     reset,
+    watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<AddressFormValues>({
     resolver: zodResolver(addressSchema),
     defaultValues: {
       name: user?.name ?? '',
       phone: user?.phone ?? '',
+      pincode: initialPincode ?? '',
     },
   });
+
+  const pincodeValue = watch('pincode');
+  const stateValue = watch('state');
 
   useEffect(() => {
     if (!isAuthenticated()) return;
@@ -70,14 +82,63 @@ export default function AddressStep({ onContinue }: AddressStepProps) {
       .finally(() => setLoading(false));
   }, [isAuthenticated]);
 
+  useEffect(() => {
+    if (!validatePincode(pincodeValue)) {
+      setPincodeLoading(false);
+      setPincodeError('');
+      return;
+    }
+
+    let cancelled = false;
+    setPincodeLoading(true);
+    setPincodeError('');
+
+    lookupPincodeState(pincodeValue).then((state) => {
+      if (cancelled) return;
+      setPincodeLoading(false);
+
+      if (state) {
+        setValue('state', state, { shouldValidate: true });
+        onShippingChange({
+          pincode: pincodeValue,
+          state,
+          shippingCharge: calculateShippingCharge(state),
+        });
+      } else {
+        setPincodeError('Could not detect state. Please select manually.');
+        onShippingChange({
+          pincode: pincodeValue,
+          state: '',
+          shippingCharge: calculateShippingCharge(''),
+        });
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pincodeValue, setValue, onShippingChange]);
+
   const handleContinue = () => {
     if (showForm) return; // handled by form submit
     const address = savedAddresses.find((a) => a._id === selectedId);
-    if (address) onContinue(address);
+    if (address) {
+      onShippingChange({
+        pincode: address.pincode,
+        state: address.state,
+        shippingCharge: calculateShippingCharge(address.state),
+      });
+      onContinue(address);
+    }
   };
 
   const onFormSubmit = (values: AddressFormValues) => {
     const address: Address = { ...values };
+    onShippingChange({
+      pincode: values.pincode,
+      state: values.state,
+      shippingCharge: calculateShippingCharge(values.state),
+    });
     onContinue(address);
   };
 
@@ -253,6 +314,16 @@ export default function AddressStep({ onContinue }: AddressStepProps) {
               </label>
               <select
                 {...register('state')}
+                onChange={(e) => {
+                  register('state').onChange(e);
+                  if (validatePincode(pincodeValue)) {
+                    onShippingChange({
+                      pincode: pincodeValue,
+                      state: e.target.value,
+                      shippingCharge: calculateShippingCharge(e.target.value),
+                    });
+                  }
+                }}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent bg-white"
               >
                 <option value="">Select state</option>
@@ -271,16 +342,34 @@ export default function AddressStep({ onContinue }: AddressStepProps) {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Pincode <span className="text-red-500">*</span>
               </label>
-              <input
-                {...register('pincode')}
-                type="text"
-                inputMode="numeric"
-                placeholder="400001"
-                maxLength={6}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-              />
+              <div className="relative">
+                <input
+                  {...register('pincode')}
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="400001"
+                  maxLength={6}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                />
+                {pincodeLoading && (
+                  <Loader2 className="w-4 h-4 animate-spin text-primary absolute right-3 top-1/2 -translate-y-1/2" />
+                )}
+              </div>
               {errors.pincode && (
                 <p className="mt-1 text-xs text-red-500">{errors.pincode.message}</p>
+              )}
+              {pincodeError && !errors.pincode && (
+                <p className="mt-1 text-xs text-red-500">{pincodeError}</p>
+              )}
+              {pincodeValue && validatePincode(pincodeValue) && !pincodeLoading && !pincodeError && stateValue && (
+                <div className="mt-2 flex items-center gap-2 text-sm text-gray-600">
+                  <Truck className="w-4 h-4 text-primary shrink-0" />
+                  <span>
+                    Shipping: <span className="font-semibold text-gray-900">{formatPrice(calculateShippingCharge(stateValue))}</span>
+                    {' • '}
+                    <span className="text-gray-500">{stateValue}</span>
+                  </span>
+                </div>
               )}
             </div>
           </div>

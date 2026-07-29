@@ -19,7 +19,7 @@ export default function CartItem({ item, compact = false }: CartItemProps) {
 
   return (
     <div className="flex gap-3 py-3">
-      <Link href={`/products/${item.slug}`} className="shrink-0">
+      <Link href={`/products/${item.slug ?? item.productId}`} className="shrink-0">
         <div className={`relative bg-gray-100 rounded-lg overflow-hidden ${compact ? 'w-16 h-16' : 'w-20 h-20'}`}>
           <Image
             src={item.image}
@@ -33,24 +33,24 @@ export default function CartItem({ item, compact = false }: CartItemProps) {
 
       <div className="flex-1 min-w-0">
         <Link
-          href={`/products/${item.slug}`}
+          href={`/products/${item.slug ?? item.productId}`}
           className="text-sm font-medium text-gray-900 hover:text-primary line-clamp-2 transition-colors"
         >
           {item.name}
         </Link>
-        {item.color && (
+        {item.attributes?.color && (
           <p className="flex items-center gap-1.5 text-xs text-gray-500 mt-0.5">
-            {item.colorCode && (
+            {item.attributes.colorCode && (
               <span
                 className="h-3 w-3 rounded-full border border-black/10 shrink-0"
-                style={{ backgroundColor: item.colorCode }}
+                style={{ backgroundColor: item.attributes.colorCode }}
               />
             )}
-            {item.color}
+            {item.attributes.color}
           </p>
         )}
-        {item.variant && (
-          <p className="text-xs text-gray-500 mt-0.5">{item.variant}</p>
+        {item.attributes?.size && (
+          <p className="text-xs text-gray-500 mt-0.5">{item.attributes.size}</p>
         )}
 
         <div className="flex items-center justify-between mt-2">
@@ -58,9 +58,9 @@ export default function CartItem({ item, compact = false }: CartItemProps) {
             <span className="text-sm font-semibold text-gray-900">
               {formatPrice(item.price)}
             </span>
-            {item.comparePrice && item.comparePrice > item.price && (
+            {item.originalPrice != null && item.originalPrice > item.price && (
               <span className="ml-1.5 text-xs text-gray-400 line-through">
-                {formatPrice(item.comparePrice)}
+                {formatPrice(item.originalPrice)}
               </span>
             )}
           </div>
@@ -69,7 +69,7 @@ export default function CartItem({ item, compact = false }: CartItemProps) {
             <div className="flex items-center gap-2">
               <span className="text-xs text-gray-500">Qty: {item.quantity}</span>
               <button
-                onClick={() => removeItem(item.productId, item.variant, item.variantId)}
+                onClick={() => removeItem(item._id)}
                 aria-label="Remove item"
                 className="p-1 text-gray-400 hover:text-error transition-colors"
               >
@@ -80,11 +80,11 @@ export default function CartItem({ item, compact = false }: CartItemProps) {
             <div className="flex items-center gap-2">
               <QuantitySelector
                 quantity={item.quantity}
-                max={item.stock}
-                onChange={(qty) => updateQuantity(item.productId, qty, item.variant, item.variantId)}
+                max={item.stock?.stock ?? 99}
+                onChange={(qty) => updateQuantity(item._id, qty)}
               />
               <button
-                onClick={() => removeItem(item.productId, item.variant, item.variantId)}
+                onClick={() => removeItem(item._id)}
                 aria-label="Remove item"
                 className="p-1 text-gray-400 hover:text-error transition-colors"
               >
