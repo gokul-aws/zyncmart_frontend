@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/store/authStore';
 import { useCartStore } from '@/lib/store/cartStore';
@@ -55,10 +55,17 @@ export function useAuth() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+  // `loading` state only flips the disabled attribute on the next render, which
+  // isn't fast enough to stop a second submit fired in the same tick (e.g. a
+  // fast double-click before React re-renders). Guard re-entrancy with a ref.
+  const inFlight = useRef(false);
 
   const { setAuth, clearAuth, user, isAuthenticated } = useAuthStore();
   const finishAuth = async (destination: string) => {
-    await useCartStore.getState().loadCart();
+    // A cart-load failure here must not surface as a login/registration
+    // error — auth already succeeded by this point. The cart reloads again
+    // on the next page mount (see Providers.tsx) if this attempt fails.
+    await useCartStore.getState().loadCart().catch(() => {});
     window.location.href = destination;
   };
 
@@ -67,6 +74,8 @@ export function useAuth() {
     redirectTo = '/account',
     rememberMe = false
   ) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setLoading(true);
     setError(null);
     try {
@@ -97,6 +106,7 @@ export function useAuth() {
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Login failed. Please try again.'));
     } finally {
+      inFlight.current = false;
       setLoading(false);
     }
   };
@@ -105,6 +115,8 @@ export function useAuth() {
   // — returns the email on success (for the UI to move to the OTP step) or
   // null on failure (see `error`).
   const signUp = async (payload: RegisterPayload): Promise<string | null> => {
+    if (inFlight.current) return null;
+    inFlight.current = true;
     setLoading(true);
     setError(null);
     try {
@@ -114,6 +126,7 @@ export function useAuth() {
       setError(getErrorMessage(err, 'Registration failed. Please try again.'));
       return null;
     } finally {
+      inFlight.current = false;
       setLoading(false);
     }
   };
@@ -121,6 +134,8 @@ export function useAuth() {
   // Step 2 of registration: verify the OTP, which creates the account and
   // logs the user in — same completion flow as signIn.
   const verifyOtp = async (email: string, otp: string, redirectTo = '/account') => {
+    if (inFlight.current) return false;
+    inFlight.current = true;
     setLoading(true);
     setError(null);
     try {
@@ -132,6 +147,7 @@ export function useAuth() {
       setError(getErrorMessage(err, 'Invalid or expired OTP. Please try again.'));
       return false;
     } finally {
+      inFlight.current = false;
       setLoading(false);
     }
   };

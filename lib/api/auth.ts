@@ -57,7 +57,11 @@ export async function resetPassword(email: string, otp: string, password: string
 }
 
 export async function changePassword(payload: { currentPassword: string; newPassword: string }): Promise<void> {
-  await api.patch('/auth/change-password', payload);
+  // Backend route is POST /auth/change-password and expects { currentPassword, password }.
+  await api.post('/auth/change-password', {
+    currentPassword: payload.currentPassword,
+    password: payload.newPassword,
+  });
 }
 
 export async function fetchMe(): Promise<User> {
@@ -66,7 +70,6 @@ export async function fetchMe(): Promise<User> {
 }
 
 export async function updateProfile(payload: Partial<Pick<User, 'name' | 'phone'>>): Promise<User> {
-  console.log("payload =>",payload)
   const { data } = await api.patch('/users/me', payload);
   return data.data as User;
 }

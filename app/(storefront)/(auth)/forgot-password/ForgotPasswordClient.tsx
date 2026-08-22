@@ -8,6 +8,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { CheckCircle2 } from 'lucide-react';
 import { forgotPassword, resetPassword } from '@/lib/api/auth';
+import { passwordSchema } from '@/lib/validation';
+import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 
 const emailSchema = z.object({ email: z.string().email('Enter a valid email') });
 type EmailFormData = z.infer<typeof emailSchema>;
@@ -15,7 +17,7 @@ type EmailFormData = z.infer<typeof emailSchema>;
 const resetSchema = z
   .object({
     otp: z.string().regex(/^\d{6}$/, 'Enter the 6-digit code'),
-    password: z.string().min(8, 'Password must be at least 8 characters'),
+    password: passwordSchema,
     confirmPassword: z.string(),
   })
   .refine((d) => d.password === d.confirmPassword, {
@@ -32,6 +34,7 @@ export default function ForgotPasswordClient() {
   const [resending, setResending] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const [resendMessage, setResendMessage] = useState<string | null>(null);
+  const guard = useSubmitGuard();
 
   const {
     register: registerEmail,
@@ -45,7 +48,7 @@ export default function ForgotPasswordClient() {
     formState: { errors: resetErrors },
   } = useForm<ResetFormData>({ resolver: zodResolver(resetSchema) });
 
-  const onSendCode = async (data: EmailFormData) => {
+  const onSendCode = (data: EmailFormData) => guard(async () => {
     setLoading(true);
     setApiError(null);
     try {
@@ -56,25 +59,27 @@ export default function ForgotPasswordClient() {
     } finally {
       setLoading(false);
     }
-  };
+  });
 
-  const onResetPassword = async (data: ResetFormData) => {
+  const onResetPassword = (data: ResetFormData) => guard(async () => {
     if (!pendingEmail) return;
     setLoading(true);
     setApiError(null);
     try {
       await resetPassword(pendingEmail, data.otp, data.password);
       setDone(true);
-    } catch (err: any) {
-      setApiError(
-        err?.response?.data?.error || 'Invalid or expired code. Please try again.'
-      );
+    } catch (err: unknown) {
+      const message =
+        err && typeof err === 'object' && 'response' in err
+          ? (err as { response?: { data?: { error?: string } } }).response?.data?.error
+          : undefined;
+      setApiError(message || 'Invalid or expired code. Please try again.');
     } finally {
       setLoading(false);
     }
-  };
+  });
 
-  const handleResend = async () => {
+  const handleResend = () => guard(async () => {
     if (!pendingEmail) return;
     setResending(true);
     setResendMessage(null);
@@ -86,7 +91,7 @@ export default function ForgotPasswordClient() {
     } finally {
       setResending(false);
     }
-  };
+  });
 
   if (done) {
     return (
@@ -136,11 +141,12 @@ export default function ForgotPasswordClient() {
 
             <form onSubmit={handleResetSubmit(onResetPassword)} className="space-y-4" noValidate>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="reset-otp" className="block text-sm font-medium text-gray-700 mb-1">
                   Verification code
                 </label>
                 <input
                   {...registerReset('otp')}
+                  id="reset-otp"
                   type="text"
                   inputMode="numeric"
                   maxLength={6}
@@ -152,23 +158,29 @@ export default function ForgotPasswordClient() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">New password</label>
+                <label htmlFor="reset-password" className="block text-sm font-medium text-gray-700 mb-1">New password</label>
                 <input
                   {...registerReset('password')}
+                  id="reset-password"
                   type="password"
                   autoComplete="new-password"
                   placeholder="••••••••"
                   className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                 />
-                {resetErrors.password && (
+                {resetErrors.password ? (
                   <p className="mt-1 text-xs text-error">{resetErrors.password.message}</p>
+                ) : (
+                  <p className="mt-1 text-xs text-gray-400">
+                    At least 8 characters, with uppercase, lowercase, a number, and a special character.
+                  </p>
                 )}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Confirm password</label>
+                <label htmlFor="reset-confirm-password" className="block text-sm font-medium text-gray-700 mb-1">Confirm password</label>
                 <input
                   {...registerReset('confirmPassword')}
+                  id="reset-confirm-password"
                   type="password"
                   autoComplete="new-password"
                   placeholder="••••••••"
@@ -232,9 +244,10 @@ export default function ForgotPasswordClient() {
 
           <form onSubmit={handleEmailSubmit(onSendCode)} className="space-y-4" noValidate>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <label htmlFor="forgot-email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
               <input
                 {...registerEmail('email')}
+                id="forgot-email"
                 type="email"
                 autoComplete="email"
                 className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"

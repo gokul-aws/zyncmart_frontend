@@ -9,11 +9,19 @@ import { z } from 'zod';
 import { CheckCircle2 } from 'lucide-react';
 import { resetPassword } from '@/lib/api/auth';
 import { useApiValidation } from '@/hooks/useApiValidation';
+import { passwordSchema } from '@/lib/validation';
+import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 
+// The backend's reset-password flow is OTP-based (a 6-digit code emailed by
+// POST /auth/forgot-password), not a token link, so this page collects the
+// same email + otp + password used by /auth/reset-password. It isn't linked
+// to from the app (the /forgot-password page handles the flow end-to-end
+// inline) but is kept working for direct navigation.
 const schema = z
   .object({
-    token: z.string().min(1, 'Token is required'),
-    password: z.string().min(8, 'Password must be at least 8 characters'),
+    email: z.string().email('Enter a valid email'),
+    otp: z.string().regex(/^\d{6}$/, 'Enter the 6-digit code'),
+    password: passwordSchema,
     confirmPassword: z.string().min(1, 'Please confirm your password'),
   })
   .refine((d) => d.password === d.confirmPassword, {
@@ -26,8 +34,10 @@ type FormData = z.infer<typeof schema>;
 export default function ResetPasswordClient() {
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
+  const guard = useSubmitGuard();
   const searchParams = useSearchParams();
-  const urlToken = searchParams?.get('token') ?? '';
+  const urlEmail = searchParams?.get('email') ?? '';
+  const urlOtp = searchParams?.get('otp') ?? '';
 
   const { apiErrors, generalError, handleApiError, clearErrors, clearFieldError } = useApiValidation<FormData>();
 
@@ -38,24 +48,27 @@ export default function ResetPasswordClient() {
   } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
-      token: urlToken,
+      email: urlEmail,
+      otp: urlOtp,
       password: '',
       confirmPassword: '',
     },
   });
 
-  const onSubmit = async (data: FormData) => {
+  const onSubmit = (data: FormData) => guard(async () => {
     setLoading(true);
     clearErrors();
     try {
-      await resetPassword(data.token, data.password, data.confirmPassword);
+      await resetPassword(data.email, data.otp, data.password);
       setSuccess(true);
     } catch (err) {
+      // Invalid/expired codes come back as a generic 400 from the backend
+      // (it never reveals whether the email or the code was the problem).
       handleApiError(err);
     } finally {
       setLoading(false);
     }
-  };
+  });
 
   return (
     <div className="min-h-[80vh] flex items-center justify-center px-4 py-12">
@@ -78,7 +91,9 @@ export default function ResetPasswordClient() {
           ) : (
             <>
               <h1 className="text-2xl font-bold text-gray-900 mb-1">Reset password</h1>
-              <p className="text-sm text-gray-500 mb-6">Enter your new password below.</p>
+              <p className="text-sm text-gray-500 mb-6">
+                Enter the 6-digit code we emailed you along with your new password.
+              </p>
 
               {generalError && (
                 <div className="mb-4 px-4 py-3 bg-red-50 border border-red-100 rounded-lg text-sm text-error">
@@ -87,44 +102,67 @@ export default function ResetPasswordClient() {
               )}
 
               <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
-                {/* Token Field (Only shown if token is not in URL, otherwise hidden input) */}
-                {!urlToken ? (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Reset Token</label>
-                    <input
-                      {...register('token', { onChange: () => clearFieldError('token') })}
-                      type="text"
-                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                      placeholder="Enter the reset token from your email"
-                    />
-                    {errors.token && <p className="mt-1 text-xs text-error">{errors.token.message}</p>}
-                    {!errors.token && apiErrors?.token?.map((msg, i) => (
-                      <p key={i} className="mt-1 text-xs text-error">{msg}</p>
-                    ))}
-                  </div>
-                ) : (
-                  <input type="hidden" {...register('token')} />
-                )}
+                <div>
+                  <label htmlFor="rp-email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                  <input
+                    {...register('email', { onChange: () => clearFieldError('email') })}
+                    id="rp-email"
+                    type="email"
+                    autoComplete="email"
+                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    placeholder="you@example.com"
+                  />
+                  {errors.email && <p className="mt-1 text-xs text-error">{errors.email.message}</p>}
+                  {!errors.email && apiErrors?.email?.map((msg, i) => (
+                    <p key={i} className="mt-1 text-xs text-error">{msg}</p>
+                  ))}
+                </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
+                  <label htmlFor="rp-otp" className="block text-sm font-medium text-gray-700 mb-1">Verification code</label>
+                  <input
+                    {...register('otp', { onChange: () => clearFieldError('otp') })}
+                    id="rp-otp"
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    autoComplete="one-time-code"
+                    placeholder="123456"
+                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm tracking-[0.3em] text-center focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  />
+                  {errors.otp && <p className="mt-1 text-xs text-error">{errors.otp.message}</p>}
+                  {!errors.otp && apiErrors?.otp?.map((msg, i) => (
+                    <p key={i} className="mt-1 text-xs text-error">{msg}</p>
+                  ))}
+                </div>
+
+                <div>
+                  <label htmlFor="rp-password" className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
                   <input
                     {...register('password', { onChange: () => clearFieldError('password') })}
+                    id="rp-password"
                     type="password"
                     autoComplete="new-password"
                     className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                     placeholder="••••••••"
                   />
-                  {errors.password && <p className="mt-1 text-xs text-error">{errors.password.message}</p>}
+                  {errors.password ? (
+                    <p className="mt-1 text-xs text-error">{errors.password.message}</p>
+                  ) : (
+                    <p className="mt-1 text-xs text-gray-400">
+                      At least 8 characters, with uppercase, lowercase, a number, and a special character.
+                    </p>
+                  )}
                   {!errors.password && apiErrors?.password?.map((msg, i) => (
                     <p key={i} className="mt-1 text-xs text-error">{msg}</p>
                   ))}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
+                  <label htmlFor="rp-confirm-password" className="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
                   <input
                     {...register('confirmPassword', { onChange: () => clearFieldError('confirmPassword') })}
+                    id="rp-confirm-password"
                     type="password"
                     autoComplete="new-password"
                     className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
@@ -148,6 +186,10 @@ export default function ResetPasswordClient() {
               </form>
 
               <div className="mt-6 text-center text-sm text-gray-500">
+                <Link href="/forgot-password" className="font-medium text-primary hover:underline">
+                  Request a new code
+                </Link>
+                <span className="mx-2">·</span>
                 <Link href="/login" className="font-medium text-primary hover:underline">
                   Back to Login
                 </Link>

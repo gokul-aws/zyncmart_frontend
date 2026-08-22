@@ -63,6 +63,21 @@ const refreshAccessToken = async (): Promise<{ accessToken: string; refreshToken
   return data.data as { accessToken: string; refreshToken: string };
 };
 
+// The backend rotates (and invalidates) the refresh token on every call, so
+// if two requests 401 around the same time, a second independent refresh
+// call would use an already-rotated token and fail, forcing an unwanted
+// logout even though the first refresh succeeded. Share one in-flight
+// refresh across concurrent 401s instead of firing it multiple times.
+let refreshInFlight: Promise<{ accessToken: string; refreshToken: string }> | null = null;
+const getRefreshedTokens = () => {
+  if (!refreshInFlight) {
+    refreshInFlight = refreshAccessToken().finally(() => {
+      refreshInFlight = null;
+    });
+  }
+  return refreshInFlight;
+};
+
 type RetryConfig = InternalAxiosRequestConfig & { _retry?: boolean };
 
 // Endpoints where a 401 is a normal business response (bad credentials, expired reset
@@ -88,7 +103,7 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && config && !config._retry && !isExcludedAuthCall) {
       config._retry = true;
       try {
-        const { accessToken: newToken, refreshToken: newRefreshToken } = await refreshAccessToken();
+        const { accessToken: newToken, refreshToken: newRefreshToken } = await getRefreshedTokens();
         const { useAuthStore } = await import('@/lib/store/authStore');
         const store = useAuthStore.getState();
 
@@ -111,14 +126,12 @@ api.interceptors.response.use(
       } catch {
         const { useAuthStore } = await import('@/lib/store/authStore');
         useAuthStore.getState().clearAuth();
-        if (typeof window !== 'undefined') {
-          // TODO: Admin Sign In is temporarily disabled as a separate UI entry
-          // point — always bounce through the unified customer login page,
-          // preserving the current path so the user returns here post-login.
-          // const redirectTo = window.location.pathname.startsWith('/admin') ? '/admin/login' : '/login';
-          const redirectTo = `/login?redirect=${encodeURIComponent(window.location.pathname)}`;
-          window.location.href = redirectTo;
-        }
+        // Don't force-navigate here: this branch fires for ANY failed request
+        // anywhere in the app, including background calls on public pages
+        // (home, product listings, etc.) where the visitor was never required
+        // to be signed in. Clearing auth is enough — AuthGuard/AdminGuard are
+        // reactive to accessToken becoming null and will redirect to /login
+        // (with a `redirect` back-link) on pages that actually require auth.
       }
     }
 

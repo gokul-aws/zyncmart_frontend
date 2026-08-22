@@ -6,13 +6,14 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useAuth } from '@/hooks/useAuth';
+import { passwordSchema } from '@/lib/validation';
 
 const schema = z
   .object({
     name: z.string().min(2, 'Name must be at least 2 characters'),
     email: z.string().email('Enter a valid email'),
     phone: z.string().regex(/^[6-9]\d{9}$/, 'Enter a valid 10-digit Indian mobile number'),
-    password: z.string().min(8, 'Password must be at least 8 characters'),
+    password: passwordSchema,
     confirmPassword: z.string(),
     terms: z.literal(true, { error: 'You must accept the terms' }),
   })
@@ -96,11 +97,12 @@ export default function RegisterClient() {
 
             <form onSubmit={handleOtpSubmit(onVerifyOtp)} className="space-y-4" noValidate>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="otp" className="block text-sm font-medium text-gray-700 mb-1">
                   Verification code
                 </label>
                 <input
                   {...registerOtp('otp')}
+                  id="otp"
                   type="text"
                   inputMode="numeric"
                   maxLength={6}
@@ -171,14 +173,22 @@ export default function RegisterClient() {
               { name: 'confirmPassword', label: 'Confirm Password', type: 'password', placeholder: '••••••••', autocomplete: 'new-password' },
             ].map((field) => (
               <div key={field.name}>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{field.label}</label>
+                <label htmlFor={field.name} className="block text-sm font-medium text-gray-700 mb-1">
+                  {field.label}
+                </label>
                 <input
                   {...register(field.name as keyof FormData)}
+                  id={field.name}
                   type={field.type}
                   autoComplete={field.autocomplete}
                   placeholder={field.placeholder}
                   className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                 />
+                {field.name === 'password' && !errors.password && (
+                  <p className="mt-1 text-xs text-gray-400">
+                    At least 8 characters, with uppercase, lowercase, a number, and a special character.
+                  </p>
+                )}
                 {errors[field.name as keyof FormData] && (
                   <p className="mt-1 text-xs text-error">
                     {errors[field.name as keyof FormData]?.message as string}
