@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/store/authStore';
 import { useCartStore } from '@/lib/store/cartStore';
+import { useWishlistStore } from '@/lib/store/wishlistStore';
 import { login, register, verifyRegistrationOtp, resendRegistrationOtp, logout } from '@/lib/api/auth';
 import type { LoginPayload, RegisterPayload } from '@/lib/api/auth';
 
@@ -62,10 +63,11 @@ export function useAuth() {
 
   const { setAuth, clearAuth, user, isAuthenticated } = useAuthStore();
   const finishAuth = async (destination: string) => {
-    // A cart-load failure here must not surface as a login/registration
-    // error — auth already succeeded by this point. The cart reloads again
-    // on the next page mount (see Providers.tsx) if this attempt fails.
+    // A cart/wishlist load failure here must not surface as a login/registration
+    // error — auth already succeeded by this point. Both reload again on the
+    // next page mount (see Providers.tsx) if this attempt fails.
     await useCartStore.getState().loadCart().catch(() => {});
+    await useWishlistStore.getState().loadWishlist().catch(() => {});
     window.location.href = destination;
   };
 
@@ -172,6 +174,7 @@ export function useAuth() {
     clearAuth();
     useCartStore.setState({ items: [], loading: false });
     useCartStore.getState().loadCart();
+    useWishlistStore.setState({ items: [], products: [], loading: false });
     router.push('/');
   };
 

@@ -104,7 +104,13 @@ export interface Product {
   isActive: boolean;
   metaTitle?: string;
   metaDescription?: string;
-  ratings: { average: number; count: number };
+  ratings: {
+    average: number;
+    count: number;
+    // Per-star breakdown computed from ALL reviews (not just the current
+    // page) — may be absent on data older than this field.
+    distribution?: Record<'1' | '2' | '3' | '4' | '5', number>;
+  };
   createdAt: string;
 }
 

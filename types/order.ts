@@ -18,10 +18,10 @@ export interface OrderItem {
   image: string;
   price: number;
   quantity: number;
-  variant?: string;
   variantId?: string;
   color?: string;
   colorCode?: string;
+  size?: string;
   sku?: string;
 }
 

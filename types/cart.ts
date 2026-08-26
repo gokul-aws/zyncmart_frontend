@@ -35,4 +35,8 @@ export interface CartSummary {
 export interface CartResponse {
   items: CartItem[];
   summary: CartSummary;
+  // Human-readable notices for anything the backend changed while
+  // re-syncing the cart against live product data (item removed, price
+  // changed, quantity reduced for insufficient stock).
+  notices?: string[];
 }

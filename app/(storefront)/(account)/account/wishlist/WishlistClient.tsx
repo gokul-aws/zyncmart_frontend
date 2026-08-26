@@ -1,26 +1,25 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
 import { Heart } from 'lucide-react';
 import { useWishlist } from '@/hooks/useWishlist';
-import { fetchProducts } from '@/lib/api/products';
 import ProductCard from '@/components/product/ProductCard';
 import EmptyState from '@/components/ui/EmptyState';
 
 export default function WishlistClient() {
-  const { items } = useWishlist();
+  // The wishlist store is the source of truth (backed by GET /wishlist,
+  // fully populated) — no separate product fetch needed, and unlike the
+  // previous implementation this can't silently drop items that aren't
+  // among the 50 most-recently-created products in the whole catalog.
+  const { products: entries, loadWishlist } = useWishlist();
+  const [isLoading, setIsLoading] = useState(true);
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['wishlist-products', items],
-    queryFn: () =>
-      items.length === 0
-        ? Promise.resolve({ data: [], pagination: { page: 1, limit: 0, total: 0, pages: 0 }, success: true })
-        : fetchProducts({ limit: 50 }),
-    enabled: items.length > 0,
-    staleTime: 60_000,
-  });
+  useEffect(() => {
+    loadWishlist().finally(() => setIsLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const products = (data?.data ?? []).filter((p) => items.includes(p._id));
+  const products = entries.map((e) => e.product);
 
   if (isLoading) {
     return (
@@ -38,10 +37,10 @@ export default function WishlistClient() {
   return (
     <div className="space-y-5">
       <h1 className="text-xl font-bold text-gray-900">
-        My Wishlist {items.length > 0 && `(${items.length})`}
+        My Wishlist {products.length > 0 && `(${products.length})`}
       </h1>
 
-      {items.length === 0 ? (
+      {products.length === 0 ? (
         <EmptyState
           title="Your wishlist is empty"
           description="Save items you love by tapping the heart icon."

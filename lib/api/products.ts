@@ -20,7 +20,10 @@ export async function fetchProducts(
 
   const res = await fetch(
     `${BASE_URL}/products${params.toString() ? `?${params}` : ''}`,
-    filters.search ? { cache: 'no-store' } : { next: { revalidate: 3600 } }
+    // 1-hour ISR ceiling is a safety net, not the primary invalidation path —
+    // an admin create/update/delete calls revalidateTag('products') on
+    // success (see lib/actions/revalidate.ts) to bust this immediately.
+    filters.search ? { cache: 'no-store' } : { next: { revalidate: 3600, tags: ['products'] } }
   );
 
   if (!res.ok) throw new Error(`fetchProducts failed: ${res.status}`);
@@ -38,7 +41,9 @@ export const fetchBestSellers = () =>
 
 export async function fetchProduct(slug: string): Promise<Product> {
   const res = await fetch(`${BASE_URL}/products/${slug}`, {
-    next: { revalidate: 3600 },
+    // Tagged per-slug (not the shared 'products' tag) so updating one
+    // product's detail page doesn't bust every other product's cached PDP.
+    next: { revalidate: 3600, tags: [`product:${slug}`] },
   });
 
   if (!res.ok) throw new Error(`fetchProduct failed: ${res.status}`);

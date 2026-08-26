@@ -14,6 +14,7 @@ import {
   uploadVariantImages,
   removeVariantImage,
 } from '@/lib/api/products';
+import { revalidateProducts } from '@/lib/actions/revalidate';
 import type {
   Product,
   ProductCreatePayload,
@@ -21,7 +22,14 @@ import type {
   ProductUpdatePayload,
 } from '@/types/product';
 
-/** Invalidate all storefront query caches that display product data. */
+/**
+ * Invalidate every cache layer that can hold storefront product data:
+ * this browser's React Query cache (so an admin who also has a storefront
+ * tab open sees the change immediately) and the Next.js server-side Data
+ * Cache via a tag-scoped Server Action (so every *other* visitor's
+ * server-rendered pages — homepage, listing, PDP — stop serving the
+ * pre-mutation snapshot instead of waiting out its 1-hour ISR ceiling).
+ */
 function invalidateStorefrontQueries(qc: ReturnType<typeof useQueryClient>, slug?: string) {
   qc.invalidateQueries({ queryKey: ['products'] });
   qc.invalidateQueries({ queryKey: ['product-search'] });
@@ -29,6 +37,9 @@ function invalidateStorefrontQueries(qc: ReturnType<typeof useQueryClient>, slug
   if (slug) {
     qc.invalidateQueries({ queryKey: ['product', slug] });
   }
+  revalidateProducts(slug).catch(() => {
+    // Non-fatal — the 1-hour ISR ceiling still applies as a fallback.
+  });
 }
 
 export function useAdminProducts(filters: ProductFilters) {

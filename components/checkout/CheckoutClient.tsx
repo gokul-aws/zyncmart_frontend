@@ -8,6 +8,7 @@ import { useCartStore } from '@/lib/store/cartStore';
 import { useBuyNowStore } from '@/lib/store/buyNowStore';
 import { useAuthStore } from '@/lib/store/authStore';
 import { useRazorpay } from '@/hooks/useRazorpay';
+import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 import { createOrder, cartItemsToOrderItems } from '@/lib/api/orders';
 import { GA } from '@/lib/analytics';
 import AddressStep from './AddressStep';
@@ -39,6 +40,7 @@ export default function CheckoutClient() {
   const cartItems = useCartStore((s) => s.items);
   const cartGetSummary = useCartStore((s) => s.getSummary);
   const cartClear = useCartStore((s) => s.clearCart);
+  const cartLoad = useCartStore((s) => s.loadCart);
   const buyNowItems = useBuyNowStore((s) => s.items);
   const buyNowGetSummary = useBuyNowStore((s) => s.getSummary);
   const buyNowClear = useBuyNowStore((s) => s.clear);
@@ -47,6 +49,7 @@ export default function CheckoutClient() {
   const getSummary = isBuyNow ? buyNowGetSummary : cartGetSummary;
   const clearCheckoutItems = isBuyNow ? buyNowClear : cartClear;
   const { initiatePayment } = useRazorpay();
+  const guard = useSubmitGuard();
 
   const [currentStep, setCurrentStep] = useState<Step>('address');
   const [shippingAddress, setShippingAddress] = useState<Address | null>(null);
@@ -65,14 +68,22 @@ export default function CheckoutClient() {
       router.replace('/cart');
       return;
     }
+    // Re-sync against live product data (price/stock may have changed since
+    // it was added) — surfaces as the same toasts the cart page shows, so a
+    // stale price/quantity is caught before payment rather than only at the
+    // final createOrder rejection. Buy Now's single item is already fresh
+    // from the product page moments ago, so there's nothing to refresh.
+    if (!isBuyNow) {
+      cartLoad().catch(() => {});
+    }
     GA.beginCheckout(items);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const { subtotal } = getSummary();
+  const { subtotal, discount, coupon } = getSummary();
   const shipping = checkoutShipping.shippingCharge;
-  const total = subtotal + shipping;
-  const pricing = { subtotal, discount: 0, shipping, tax: 0, total };
+  const total = Math.max(0, subtotal - discount + shipping);
+  const pricing = { subtotal, discount, shipping, tax: 0, total };
 
   const handleAddressContinue = (address: Address) => {
     setShippingAddress(address);
@@ -80,7 +91,12 @@ export default function CheckoutClient() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handlePlaceOrder = async (paymentMethod: 'razorpay' | 'cod') => {
+  // Guarded against a fast double-click/double-submit firing this twice
+  // before React re-renders the disabled button — same pattern used for the
+  // auth forms (see useSubmitGuard). Without it, COD in particular could
+  // create two real orders from one double-click (Razorpay's own modal
+  // naturally prevents a second charge, but COD has no such gate).
+  const handlePlaceOrder = (paymentMethod: 'razorpay' | 'cod') => guard(async () => {
     if (!shippingAddress) return;
 
     let order;
@@ -90,6 +106,7 @@ export default function CheckoutClient() {
         shippingAddress,
         paymentMethod,
         pricing,
+        couponCode: coupon ?? undefined,
       });
     } catch {
       toast.error('Failed to place order. Please try again.');
@@ -107,7 +124,7 @@ export default function CheckoutClient() {
     } catch {
       // errors are toasted inside initiatePayment; order already created
     }
-  };
+  });
 
   const currentStepIndex = STEPS.indexOf(currentStep);
 

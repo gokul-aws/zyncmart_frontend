@@ -1,14 +1,16 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { ShoppingCart, Share2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Product } from '@/types/product';
-import type { CartItem } from '@/types/cart';
 import { useCartStore } from '@/lib/store/cartStore';
+import { useAuthStore } from '@/lib/store/authStore';
+import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 import { shareProduct } from '@/lib/share';
 import StarRating from '@/components/ui/StarRating';
 import PriceDisplay from '@/components/ui/PriceDisplay';
@@ -21,8 +23,12 @@ interface ProductCardProps {
 }
 
 export default function ProductCard({ product, view = 'grid', priority = false }: ProductCardProps) {
+  const router = useRouter();
   const addItem = useCartStore((state) => state.addItem);
   const toggleDrawer = useCartStore((state) => state.toggleDrawer);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const guard = useSubmitGuard();
+  const [adding, setAdding] = useState(false);
 
   const MAX_SWATCHES = 5;
   // Support both legacy colorVariants and new variants format
@@ -98,6 +104,8 @@ export default function ProductCard({ product, view = 'grid', priority = false }
     ? (firstAvailableVariant?.stock ?? 0) <= product.lowStockThreshold
     : product.stock > 0 && product.stock <= product.lowStockThreshold);
 
+  const addToCartLabel = isOutOfStock ? 'Out of Stock' : isVariable ? 'Select Options' : 'Add to Cart';
+
   const ColorSwatches = swatchColors.length > 0 && (
     <div className="flex items-center gap-1 mt-1.5">
       {visibleColors.map((variant, index) => (
@@ -119,21 +127,36 @@ export default function ProductCard({ product, view = 'grid', priority = false }
     </div>
   );
 
-  const handleAddToCart = async (e: React.MouseEvent) => {
+  // The card has no color/size picker, so for a variable product it must
+  // never guess which variant to add — send the shopper to the product page
+  // to choose instead (same rule as the PDP: never auto-select a variant).
+  const handleAddToCart = (e: React.MouseEvent) => guard(async () => {
     e.preventDefault();
     e.stopPropagation();
     if (isOutOfStock) return;
 
-    const defaultVariantId = firstAvailableVariant?._id ?? null;
+    if (isVariable) {
+      router.push(`/products/${product.slug}`);
+      return;
+    }
 
+    if (!isAuthenticated()) {
+      toast.info('Please log in to add items to your cart.');
+      router.push(`/login?redirect=/products/${product.slug}`);
+      return;
+    }
+
+    setAdding(true);
     try {
-      await addItem(product._id, 1, defaultVariantId);
+      await addItem(product._id, 1, null);
       toggleDrawer();
       toast.success('Added to cart', { description: product.name });
     } catch {
       toast.error('Failed to add to cart. Please try again.');
+    } finally {
+      setAdding(false);
     }
-  };
+  });
 
   const handleShare = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -233,7 +256,7 @@ export default function ProductCard({ product, view = 'grid', priority = false }
           {/* Quick-add (desktop hover) */}
           <button
             onClick={handleAddToCart}
-            disabled={isOutOfStock}
+            disabled={isOutOfStock || adding}
             className="absolute bottom-0 left-0 right-0 flex items-center justify-center gap-2
                        bg-primary/95 text-white text-sm font-medium py-3
                        translate-y-full group-hover:translate-y-0
@@ -242,7 +265,7 @@ export default function ProductCard({ product, view = 'grid', priority = false }
                        hidden md:flex"
           >
             <ShoppingCart className="w-4 h-4" />
-            {isOutOfStock ? 'Out of Stock' : 'Add to Cart'}
+            {addToCartLabel}
           </button>
         </div>
 
@@ -268,14 +291,14 @@ export default function ProductCard({ product, view = 'grid', priority = false }
           {/* Mobile add-to-cart */}
           <button
             onClick={handleAddToCart}
-            disabled={isOutOfStock}
+            disabled={isOutOfStock || adding}
             className="mt-2 w-full flex items-center justify-center gap-1.5 bg-primary text-white
                        text-xs font-medium py-2 rounded-lg
                        disabled:bg-gray-300 disabled:cursor-not-allowed
                        md:hidden transition-colors active:opacity-80"
           >
             <ShoppingCart className="w-3.5 h-3.5" />
-            {isOutOfStock ? 'Out of Stock' : 'Add to Cart'}
+            {addToCartLabel}
           </button>
         </div>
       </Link>

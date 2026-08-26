@@ -218,7 +218,7 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-slate-900 dark:text-white truncate">{item.name}</p>
-                        {item.color && (
+                        {(item.color || item.size) && (
                           <p className="flex items-center gap-1.5 text-sm text-slate-500 mt-1">
                             {item.colorCode && (
                               <span
@@ -226,11 +226,12 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                                 style={{ backgroundColor: item.colorCode }}
                               />
                             )}
-                            Color: {item.color}
+                            {item.color && <span>Color: {item.color}</span>}
+                            {item.color && item.size && <span className="text-slate-300">·</span>}
+                            {item.size && <span>Size: {item.size}</span>}
                             {item.sku && <span className="text-slate-400"> · SKU: {item.sku}</span>}
                           </p>
                         )}
-                        {item.variant && <p className="text-sm text-slate-500">Variant: {item.variant}</p>}
                         <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-slate-500 dark:text-slate-400">
                           <span>{formatPrice(item.price)}</span>
                           <span>Subtotal: {formatPrice(item.price * item.quantity)}</span>

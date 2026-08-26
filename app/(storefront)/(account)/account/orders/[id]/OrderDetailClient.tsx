@@ -90,7 +90,7 @@ export default function OrderDetailClient({ id }: Props) {
               </div>
               <div className="flex-1">
                 <p className="text-sm font-medium text-gray-900">{item.name}</p>
-                {item.color && (
+                {(item.color || item.size) && (
                   <p className="flex items-center gap-1.5 text-xs text-gray-500">
                     {item.colorCode && (
                       <span
@@ -98,10 +98,9 @@ export default function OrderDetailClient({ id }: Props) {
                         style={{ backgroundColor: item.colorCode }}
                       />
                     )}
-                    {item.color}
+                    {[item.color, item.size].filter(Boolean).join(' / ')}
                   </p>
                 )}
-                {item.variant && <p className="text-xs text-gray-500">{item.variant}</p>}
                 <p className="text-sm text-gray-600 mt-0.5">
                   {formatPrice(item.price)} × {item.quantity}
                 </p>

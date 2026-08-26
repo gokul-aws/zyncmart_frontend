@@ -8,7 +8,10 @@ export async function fetchCategories(): Promise<ApiResponse<Category[]>> {
   if (!BASE_URL) return { success: false, data: [] };
 
   const res = await fetch(`${BASE_URL}/categories`, {
-    next: { revalidate: 3600 },
+    // 1-hour ISR ceiling is a safety net, not the primary invalidation path —
+    // an admin create/update/delete calls revalidateTag('categories') on
+    // success (see lib/actions/revalidate.ts) to bust this immediately.
+    next: { revalidate: 3600, tags: ['categories'] },
   });
 
   if (!res.ok) throw new Error(`fetchCategories failed: ${res.status}`);
@@ -19,7 +22,9 @@ export async function fetchCategory(slug: string): Promise<ApiResponse<Category>
   if (!BASE_URL) return { success: false, data: null as unknown as Category };
 
   const res = await fetch(`${BASE_URL}/categories/${slug}`, {
-    next: { revalidate: 3600 },
+    // Tagged per-slug (not the shared 'categories' tag) so updating one
+    // category doesn't bust every other category's cached detail page.
+    next: { revalidate: 3600, tags: [`category:${slug}`] },
   });
 
   if (!res.ok) throw new Error(`fetchCategory failed: ${res.status}`);

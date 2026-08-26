@@ -114,6 +114,9 @@ export interface CreateOrderPayload {
     tax: number;
     total: number;
   };
+  // Sent for the backend to independently re-validate and apply — the
+  // `pricing.discount` above is display-only, never trusted as-is.
+  couponCode?: string;
 }
 
 export async function createOrder(payload: CreateOrderPayload): Promise<Order> {

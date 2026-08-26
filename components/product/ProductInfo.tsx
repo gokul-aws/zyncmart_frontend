@@ -23,7 +23,9 @@ import ProductColorSelector from './ProductColorSelector';
 import QuantitySelector from '@/components/ui/QuantitySelector';
 import ProductShare from './ProductShare';
 import { useCartStore } from '@/lib/store/cartStore';
+import { useBuyNowStore } from '@/lib/store/buyNowStore';
 import { useWishlistStore } from '@/lib/store/wishlistStore';
+import { useAuthStore } from '@/lib/store/authStore';
 import { GA } from '@/lib/analytics';
 import type { Product } from '@/types/product';
 import type { useVariantSelection } from '@/hooks/useProduct';
@@ -38,7 +40,9 @@ interface ProductInfoProps {
 export default function ProductInfo({ product, selection }: ProductInfoProps) {
   const router = useRouter();
   const { addItem, toggleDrawer } = useCartStore();
+  const setBuyNowItems = useBuyNowStore((s) => s.setItems);
   const { hasItem, toggleItem } = useWishlistStore();
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
   const {
     hasVariants,
@@ -97,6 +101,11 @@ export default function ProductInfo({ product, selection }: ProductInfoProps) {
 
   const handleAddToCart = async () => {
     if (outOfStock) return;
+    if (!isAuthenticated()) {
+      toast.info('Please log in to add items to your cart.');
+      router.push(`/login?redirect=/products/${product.slug}`);
+      return;
+    }
     try {
       await addItem(product._id, quantity, selectedVariant?._id);
       toggleDrawer();
@@ -107,15 +116,59 @@ export default function ProductInfo({ product, selection }: ProductInfoProps) {
     }
   };
 
-  const handleBuyNow = async () => {
+  // Buy Now must check out ONLY this product — it must never touch the
+  // user's persistent cart (adding to it would mix this purchase in with
+  // whatever else is already there, and checking out the whole cart when the
+  // user only meant to buy this one item). It builds its single line item
+  // from data already sourced from the backend (product/selectedVariant),
+  // matching exactly what /cart/add would resolve — this is only used to
+  // render the checkout page before payment; the backend re-resolves the
+  // real price/stock/variant from the DB when the order is actually created.
+  const handleBuyNow = () => {
     if (outOfStock) return;
-    await addItem(product._id, quantity, selectedVariant?._id);
-    router.push('/checkout');
+    if (!isAuthenticated()) {
+      toast.info('Please log in to continue.');
+      router.push(`/login?redirect=/products/${product.slug}`);
+      return;
+    }
+    setBuyNowItems([
+      {
+        _id: `buynow-${product._id}-${selectedVariant?._id ?? 'simple'}`,
+        productId: product._id,
+        name: product.name,
+        slug: product.slug,
+        image: imgUrl,
+        thumbnail: imgUrl,
+        sku: activeSku,
+        quantity,
+        price: activePrice,
+        originalPrice: activeOriginalPrice ?? null,
+        totalPrice: activePrice * quantity,
+        attributes: {
+          color: selectedVariant?.color?.name ?? null,
+          colorCode: selectedVariant?.color?.code ?? null,
+          size: selectedVariant?.size ?? null,
+        },
+        variant: selectedVariant?._id ?? null,
+        stock: activeStock,
+      },
+    ]);
+    router.push('/checkout?buyNow=true');
   };
 
-  const handleWishlist = () => {
-    toggleItem(product._id);
-    toast(isWishlisted ? 'Removed from wishlist' : 'Added to wishlist');
+  const handleWishlist = async () => {
+    if (!isAuthenticated()) {
+      toast.info('Please log in to save items to your wishlist.');
+      router.push('/login');
+      return;
+    }
+    const wasWishlisted = isWishlisted;
+    try {
+      await toggleItem(product._id);
+      toast(wasWishlisted ? 'Removed from wishlist' : 'Added to wishlist');
+    } catch {
+      toast.error('Something went wrong. Please try again.');
+    }
   };
 
   const checkPincode = () => {

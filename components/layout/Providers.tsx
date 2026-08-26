@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'sonner';
 import CartDrawer from '@/components/cart/CartDrawer';
 import { useCartStore } from '@/lib/store/cartStore';
+import { useWishlistStore } from '@/lib/store/wishlistStore';
 import { useAuthStore } from '@/lib/store/authStore';
 import { fetchMe } from '@/lib/api/auth';
 
@@ -27,6 +28,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     // has nothing to restore — an uncaught rejection here would just be
     // noise (e.g. a stale/expired persisted token 401ing on this request).
     useCartStore.getState().loadCart().catch(() => {});
+    useWishlistStore.getState().loadWishlist().catch(() => {});
 
     // Validate the persisted session against the backend on boot (the
     // /auth/me equivalent) instead of trusting a possibly-stale localStorage

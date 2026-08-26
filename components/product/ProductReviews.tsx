@@ -6,9 +6,10 @@ import { useAuthStore } from '@/lib/store/authStore';
 import { useProductReviews } from '@/hooks/useReviews';
 import ReviewItem from './ReviewItem';
 import AddReview from './AddReview';
+import type { Product } from '@/types/product';
 
 interface ProductReviewsProps {
-  ratings: { average: number; count: number };
+  ratings: Product['ratings'];
   productSlug: string;
 }
 
@@ -25,7 +26,12 @@ export default function ProductReviews({ ratings, productSlug }: ProductReviewsP
   const average = ratings?.average ?? 0;
   const count = ratings?.count ?? 0;
   const filled = Math.round(average);
-  const bars = [5, 4, 3, 2, 1];
+  const bars = [5, 4, 3, 2, 1] as const;
+  // Backend-computed from every review for this product, not just the
+  // current page — reviews are paginated (10/page), so deriving this from
+  // `reviews` (the current page's list) would show a wildly wrong
+  // breakdown for any product with more than one page of reviews.
+  const distribution = ratings?.distribution ?? { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 };
 
   if (isLoading) {
     return (
@@ -69,7 +75,7 @@ export default function ProductReviews({ ratings, productSlug }: ProductReviewsP
                     className="h-full bg-amber-400 rounded-full"
                     style={{
                       width: count > 0
-                        ? `${(reviews.filter(r => Math.round(r.rating) === star).length / (reviews.length || 1)) * 100}%`
+                        ? `${(distribution[String(star) as '1' | '2' | '3' | '4' | '5'] / count) * 100}%`
                         : '0%'
                     }}
                   />
