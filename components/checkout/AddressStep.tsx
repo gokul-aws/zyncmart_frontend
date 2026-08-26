@@ -36,9 +36,10 @@ interface AddressStepProps {
   onContinue: (address: Address) => void;
   onShippingChange: (shipping: { pincode: string; state: string; shippingCharge: number }) => void;
   initialPincode?: string;
+  subtotal: number;
 }
 
-export default function AddressStep({ onContinue, onShippingChange, initialPincode }: AddressStepProps) {
+export default function AddressStep({ onContinue, onShippingChange, initialPincode, subtotal }: AddressStepProps) {
   const user = useAuthStore((s) => s.user);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
@@ -99,25 +100,28 @@ export default function AddressStep({ onContinue, onShippingChange, initialPinco
 
       if (state) {
         setValue('state', state, { shouldValidate: true });
-        onShippingChange({
-          pincode: pincodeValue,
-          state,
-          shippingCharge: calculateShippingCharge(state),
-        });
       } else {
         setPincodeError('Could not detect state. Please select manually.');
-        onShippingChange({
-          pincode: pincodeValue,
-          state: '',
-          shippingCharge: calculateShippingCharge(''),
-        });
       }
     });
 
     return () => {
       cancelled = true;
     };
-  }, [pincodeValue, setValue, onShippingChange]);
+  }, [pincodeValue, setValue]);
+
+  // Recompute the shipping estimate whenever the pincode, detected/selected
+  // state, or cart subtotal changes — subtotal affects the free-shipping
+  // threshold, so it must trigger a recompute without re-hitting the pincode
+  // lookup API.
+  useEffect(() => {
+    if (!validatePincode(pincodeValue)) return;
+    onShippingChange({
+      pincode: pincodeValue,
+      state: stateValue ?? '',
+      shippingCharge: calculateShippingCharge(stateValue ?? '', subtotal),
+    });
+  }, [pincodeValue, stateValue, subtotal, onShippingChange]);
 
   const handleContinue = () => {
     if (showForm) return; // handled by form submit
@@ -126,7 +130,7 @@ export default function AddressStep({ onContinue, onShippingChange, initialPinco
       onShippingChange({
         pincode: address.pincode,
         state: address.state,
-        shippingCharge: calculateShippingCharge(address.state),
+        shippingCharge: calculateShippingCharge(address.state, subtotal),
       });
       onContinue(address);
     }
@@ -137,7 +141,7 @@ export default function AddressStep({ onContinue, onShippingChange, initialPinco
     onShippingChange({
       pincode: values.pincode,
       state: values.state,
-      shippingCharge: calculateShippingCharge(values.state),
+      shippingCharge: calculateShippingCharge(values.state, subtotal),
     });
     onContinue(address);
   };
@@ -320,7 +324,7 @@ export default function AddressStep({ onContinue, onShippingChange, initialPinco
                     onShippingChange({
                       pincode: pincodeValue,
                       state: e.target.value,
-                      shippingCharge: calculateShippingCharge(e.target.value),
+                      shippingCharge: calculateShippingCharge(e.target.value, subtotal),
                     });
                   }
                 }}
@@ -365,7 +369,7 @@ export default function AddressStep({ onContinue, onShippingChange, initialPinco
                 <div className="mt-2 flex items-center gap-2 text-sm text-gray-600">
                   <Truck className="w-4 h-4 text-primary shrink-0" />
                   <span>
-                    Shipping: <span className="font-semibold text-gray-900">{formatPrice(calculateShippingCharge(stateValue))}</span>
+                    Shipping: <span className="font-semibold text-gray-900">{formatPrice(calculateShippingCharge(stateValue, subtotal))}</span>
                     {' • '}
                     <span className="text-gray-500">{stateValue}</span>
                   </span>

@@ -54,13 +54,14 @@ export default function AdminProductTable({
           {products.map((product) => {
             const isSelected = selectedIds.includes(product._id);
             // Get primary image from variants or product images
-            const variantImage = product.variants?.[0]?.image;
+            const firstVariant = product.variants?.[0];
+            const variantImage = firstVariant?.images?.find((img) => img.isPrimary)
+              ?? firstVariant?.images?.[0]
+              ?? (firstVariant?.image ? { url: firstVariant.image, publicId: '', isPrimary: true } : null);
             const primaryImage =
               product.images.find((image) => image.isPrimary) ??
               product.images[0];
-            const displayImage = variantImage
-              ? { url: variantImage, publicId: '', isPrimary: true }
-              : primaryImage;
+            const displayImage = variantImage ?? primaryImage;
             const isVariable = product.productType === 'variable';
             const displayPrice = isVariable
               ? (product.variants?.[0]?.price ?? product.price)

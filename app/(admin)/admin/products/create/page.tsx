@@ -40,15 +40,6 @@ export default function AdminProductCreatePage() {
           if (!variant?._id) continue;
           await uploadVariantImages(product._id, variant._id, files);
         }
-      } else if (variantImageFiles.length > 0) {
-        // Legacy / edit-mode path (colorVariants): sequential upload
-        const colorVariants = product.colorVariants ?? [];
-        for (let index = 0; index < colorVariants.length; index++) {
-          const files = variantImageFiles[index];
-          if (!files?.length) continue;
-          const variant = colorVariants[index];
-          await uploadVariantImages(product._id, variant._id as string, files);
-        }
       }
 
       queryClient.invalidateQueries({ queryKey: ['admin', 'products'] });

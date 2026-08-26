@@ -171,15 +171,24 @@ export default function AdminProductDetailsPage({ params }: ProductPageProps) {
                     {variants.map((variant) => (
                       <tr key={variant._id} className="bg-slate-50 dark:bg-slate-950">
                         <td className="px-4 py-3">
-                          {variant.image ? (
-                            <div className="relative h-10 w-10 overflow-hidden rounded-lg">
-                              <Image src={variant.image} alt={variant.sku} fill className="object-cover" sizes="40px" />
-                            </div>
-                          ) : (
-                            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-200 dark:bg-slate-700 text-xs text-slate-400">
-                              —
-                            </div>
-                          )}
+                          {(() => {
+                            const thumb = variant.images?.find((img) => img.isPrimary) ?? variant.images?.[0];
+                            const url = thumb?.url ?? variant.image;
+                            return url ? (
+                              <div className="relative h-10 w-10 overflow-hidden rounded-lg">
+                                <Image src={url} alt={variant.sku} fill className="object-cover" sizes="40px" />
+                                {(variant.images?.length ?? 0) > 1 && (
+                                  <span className="absolute bottom-0 right-0 rounded-tl bg-black/60 px-1 text-[9px] font-semibold text-white">
+                                    +{(variant.images?.length ?? 1) - 1}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-200 dark:bg-slate-700 text-xs text-slate-400">
+                                —
+                              </div>
+                            );
+                          })()}
                         </td>
                         <td className="px-4 py-3 font-medium text-slate-900 dark:text-white">{variant.sku}</td>
                         <td className="px-4 py-3">
@@ -245,9 +254,13 @@ export default function AdminProductDetailsPage({ params }: ProductPageProps) {
                     <p className="text-xs text-slate-500 dark:text-slate-400">SKU: {variant.sku}</p>
                   </div>
                 </div>
-                {variant.image ? (
-                  <div className="relative h-24 w-24 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
-                    <Image src={variant.image} alt={variant.sku} fill className="object-cover" sizes="96px" />
+                {(variant.images?.length ?? 0) > 0 || variant.image ? (
+                  <div className="flex flex-wrap gap-2">
+                    {(variant.images?.length ? variant.images : [{ url: variant.image as string, publicId: '', isPrimary: true }]).map((img, i) => (
+                      <div key={img.publicId || i} className="relative h-24 w-24 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
+                        <Image src={img.url} alt={variant.sku} fill className="object-cover" sizes="96px" />
+                      </div>
+                    ))}
                   </div>
                 ) : (
                   <p className="text-xs text-slate-400">No image uploaded</p>

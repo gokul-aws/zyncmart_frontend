@@ -29,18 +29,31 @@ export default function ProductCard({ product, view = 'grid', priority = false }
   const colorVariants = product.colorVariants ?? [];
   const backendVariants = product.variants ?? [];
   const hasColorVariants = colorVariants.length > 0 || backendVariants.length > 0;
-  // For swatches, use legacy colorVariants if available, otherwise map from backend variants
+  // For swatches, use legacy colorVariants if available, otherwise dedupe
+  // backend variants by color (a color can have multiple size variants).
   const swatchColors = colorVariants.length > 0
     ? colorVariants
-    : backendVariants.filter((v) => v.color?.name).map((v) => ({
-        _id: v._id,
-        color: v.color.name,
-        colorCode: v.color.code,
-        images: [] as Product['images'],
-        stock: v.stock,
-        sku: v.sku,
-        price: v.price,
-      }));
+    : (() => {
+        const byName = new Map<string, { _id?: string; color: string; colorCode?: string; images: Product['images']; stock: number; sku: string; price: number }>();
+        for (const v of backendVariants) {
+          if (!v.color?.name) continue;
+          const existing = byName.get(v.color.name);
+          if (existing) {
+            existing.stock += v.stock;
+          } else {
+            byName.set(v.color.name, {
+              _id: v._id,
+              color: v.color.name,
+              colorCode: v.color.code,
+              images: v.images ?? (v.image ? [{ url: v.image, publicId: '', isPrimary: true }] : []),
+              stock: v.stock,
+              sku: v.sku,
+              price: v.price,
+            });
+          }
+        }
+        return Array.from(byName.values());
+      })();
   const visibleColors = swatchColors.slice(0, MAX_SWATCHES);
   const extraColorCount = swatchColors.length - visibleColors.length;
 
@@ -62,11 +75,14 @@ export default function ProductCard({ product, view = 'grid', priority = false }
   const activeVariant = swatchColors[hoveredColorIndex ?? 0] ?? null;
 
   // Get image from active variant or backend variants
-  const variantImage = backendVariants.find((v) => v.image)?.image;
+  const fallbackVariant = backendVariants.find((v) => v.images?.length || v.image);
+  const fallbackVariantImage = fallbackVariant?.images?.find((i) => i.isPrimary)?.url
+    ?? fallbackVariant?.images?.[0]?.url
+    ?? fallbackVariant?.image;
   const primaryImage =
     activeVariant?.images?.find((i) => i.isPrimary)?.url ??
     activeVariant?.images?.[0]?.url ??
-    variantImage ??
+    fallbackVariantImage ??
     product.images.find((i) => i.isPrimary)?.url ??
     product.images[0]?.url;
 

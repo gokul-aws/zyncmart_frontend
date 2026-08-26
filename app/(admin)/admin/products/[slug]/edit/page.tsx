@@ -32,20 +32,23 @@ export default function AdminProductEditPage({ params }: EditProductPageProps) {
     variantImageFiles: File[][]
   ) => {
     if (!product) return;
-    await updateMutation.mutateAsync({ id: product._id, payload });
+    // Use the response from the update, not the pre-update `product` closure
+    // — variants may have been added/removed/reordered, and their _ids only
+    // exist in this fresh response, not in the stale data the form loaded with.
+    const updated = await updateMutation.mutateAsync({ id: product._id, payload });
 
     if (imageFiles.length > 0) {
-      await uploadProductImages(product._id, imageFiles);
+      await uploadProductImages(updated._id, imageFiles);
     }
 
     if (payload.productType === 'variable' && variantImageFiles.length > 0) {
-      const updatedVariants = product.variants ?? [];
+      const updatedVariants = updated.variants ?? [];
       for (let index = 0; index < updatedVariants.length; index++) {
         const files = variantImageFiles[index];
         if (!files?.length) continue;
         const variant = updatedVariants[index];
         if (!variant?._id) continue;
-        await uploadVariantImages(product._id, variant._id, files);
+        await uploadVariantImages(updated._id, variant._id, files);
       }
     }
 

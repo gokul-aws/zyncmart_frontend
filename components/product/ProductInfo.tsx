@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'sonner';
@@ -25,61 +25,49 @@ import ProductShare from './ProductShare';
 import { useCartStore } from '@/lib/store/cartStore';
 import { useWishlistStore } from '@/lib/store/wishlistStore';
 import { GA } from '@/lib/analytics';
-import type { Product, ColorVariant, BackendProductVariant } from '@/types/product';
+import type { Product } from '@/types/product';
+import type { useVariantSelection } from '@/hooks/useProduct';
 
 const WHATSAPP = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER;
 
 interface ProductInfoProps {
   product: Product;
-  selectedColorVariant?: ColorVariant | null;
-  onColorChange?: (variant: ColorVariant) => void;
+  selection: ReturnType<typeof useVariantSelection>;
 }
 
-export default function ProductInfo({
-  product,
-  selectedColorVariant = null,
-  onColorChange,
-}: ProductInfoProps) {
+export default function ProductInfo({ product, selection }: ProductInfoProps) {
   const router = useRouter();
   const { addItem, toggleDrawer } = useCartStore();
   const { hasItem, toggleItem } = useWishlistStore();
 
-  // Resolved from the selected color variant, falling back to the product's
-  // own fields for legacy products with no color variants.
-  const activeImages = selectedColorVariant?.images?.length
-    ? selectedColorVariant.images
-    : product.images;
+  const {
+    hasVariants,
+    colors,
+    hasColorAxis,
+    selectedColor,
+    setSelectedColor,
+    sizesForSelectedColor,
+    hasSizeAxis,
+    selectedSize,
+    setSelectedSize,
+    selectedVariant,
+  } = selection;
+
+  // Resolved from the selected variant, falling back to the product's own
+  // fields for simple products with no variants at all.
+  const activeImages = selectedVariant?.images?.length ? selectedVariant.images : product.images;
   const primaryImage = activeImages.find((i) => i.isPrimary) ?? activeImages[0];
-  // For variable products, use the first variant's price as default
-  const isVariable = product.productType === 'variable';
-  const defaultVariantPrice = isVariable && product.variants?.length
-    ? product.variants[0].price
-    : product.price;
-  const activePrice = selectedColorVariant?.price ?? defaultVariantPrice;
-  const activeStock = selectedColorVariant ? selectedColorVariant.stock : product.stock;
-  const activeSku = selectedColorVariant?.sku ?? (isVariable && product.variants?.length ? product.variants[0].sku : product.sku);
-  const activeOriginalPrice = selectedColorVariant
-    ? selectedColorVariant.originalPrice
-    : (isVariable && product.variants?.length ? product.variants[0].originalPrice : product.originalPrice ?? product.comparePrice);
+  const activePrice = selectedVariant?.price ?? product.price;
+  const activeStock = selectedVariant ? selectedVariant.stock : product.stock;
+  const activeSku = selectedVariant?.sku ?? product.sku;
+  const activeOriginalPrice = selectedVariant
+    ? selectedVariant.originalPrice
+    : (product.originalPrice ?? product.comparePrice);
+  // A combination the admin never defined (e.g. Red/XL when only Red/M and
+  // Blue/XL exist) — the customer picked a real color and a real size, but
+  // no variant matches. Never treat this as purchasable.
+  const noMatchingVariant = hasVariants && !selectedVariant;
 
-  // Derive variant groups (e.g. Size options) from backend variants for
-  // the non-color dimension selector.
-  const variantGroups = useMemo(() => {
-    if (!isVariable || !product.variants?.length) return [];
-    const sizeSet = new Set<string>();
-    for (const v of product.variants) {
-      if (v.size) sizeSet.add(v.size);
-    }
-    const groups: { name: string; options: string[] }[] = [];
-    if (sizeSet.size > 1) {
-      groups.push({ name: 'Size', options: Array.from(sizeSet) });
-    }
-    return groups;
-  }, [isVariable, product.variants]);
-
-  const [selected, setSelected] = useState<Record<string, string>>(() =>
-    Object.fromEntries(variantGroups.map((g) => [g.name, g.options[0] ?? '']))
-  );
   const [quantity, setQuantity] = useState(1);
   const [pincode, setPincode] = useState('');
   const [pincodeMsg, setPincodeMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -95,16 +83,14 @@ export default function ProductInfo({
   useEffect(() => setMounted(true), []);
   const isWishlisted = mounted && hasItem(product._id);
 
-  // Reset quantity when switching colors so a stale quantity can't exceed
-  // the newly selected color's stock.
+  // Reset quantity when switching variants so a stale quantity can't exceed
+  // the newly selected combination's stock.
   useEffect(() => {
     setQuantity(1);
-  }, [selectedColorVariant?._id]);
+  }, [selectedVariant?._id]);
 
-  const outOfStock = activeStock === 0;
+  const outOfStock = noMatchingVariant || activeStock === 0;
   const lowStock = !outOfStock && activeStock <= product.lowStockThreshold;
-  const variantLabel =
-    Object.values(selected).filter(Boolean).join(' / ') || undefined;
 
   const PLACEHOLDER_IMG = 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 200 200%22%3E%3Crect width=%22200%22 height=%22200%22 fill=%22%23f3f4f6%22/%3E%3C/svg%3E';
   const imgUrl = primaryImage?.url || PLACEHOLDER_IMG;
@@ -112,7 +98,7 @@ export default function ProductInfo({
   const handleAddToCart = async () => {
     if (outOfStock) return;
     try {
-      await addItem(product._id, quantity, selectedColorVariant?._id);
+      await addItem(product._id, quantity, selectedVariant?._id);
       toggleDrawer();
       toast.success('Added to cart', { description: product.name });
       GA.addToCart(product, quantity);
@@ -123,7 +109,7 @@ export default function ProductInfo({
 
   const handleBuyNow = async () => {
     if (outOfStock) return;
-    await addItem(product._id, quantity, selectedColorVariant?._id);
+    await addItem(product._id, quantity, selectedVariant?._id);
     router.push('/checkout');
   };
 
@@ -198,31 +184,28 @@ export default function ProductInfo({
       {/* Short description */}
       <p className="text-gray-600 text-sm leading-relaxed">{product.shortDescription}</p>
 
-      {/* Color variants - support both legacy colorVariants and new variants */}
-      {((product.colorVariants?.length ?? 0) > 0 || (isVariable && (product.variants?.length ?? 0) > 0)) && onColorChange && (
+      {/* Color selector */}
+      {hasColorAxis && (
         <ProductColorSelector
-          colorVariants={product.colorVariants?.length ? product.colorVariants : (product.variants ?? []).filter((v) => v.color?.name).map((v) => ({
-            _id: v._id,
-            color: v.color.name,
-            colorCode: v.color.code,
-            images: v.image ? [{ url: v.image, publicId: '', isPrimary: true }] : [],
-            stock: v.stock,
-            sku: v.sku,
-            price: v.price,
-            originalPrice: v.originalPrice,
-          }))}
-          selected={selectedColorVariant}
-          onChange={onColorChange}
+          colors={colors}
+          selected={selectedColor}
+          onChange={setSelectedColor}
         />
       )}
 
-      {/* Variants */}
-      {variantGroups.length > 0 && (
+      {/* Size selector — only shown when the selected color actually has more than one size */}
+      {hasSizeAxis && (
         <ProductVariants
-          variants={variantGroups}
-          selected={selected}
-          onChange={(name, option) => setSelected((prev) => ({ ...prev, [name]: option }))}
+          variants={[{ name: 'Size', options: sizesForSelectedColor }]}
+          selected={{ Size: selectedSize ?? '' }}
+          onChange={(_, option) => setSelectedSize(option)}
         />
+      )}
+
+      {noMatchingVariant && (
+        <p className="text-sm font-medium text-red-600">
+          This combination isn&apos;t available. Please choose a different size or color.
+        </p>
       )}
 
       {/* Quantity */}

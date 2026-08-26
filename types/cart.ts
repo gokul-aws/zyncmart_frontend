@@ -18,7 +18,7 @@ export interface CartItem {
   totalPrice: number;
   attributes: CartItemAttributes;
   variant: string | null;
-  stock: { sku: string; stock: number } | null;
+  stock: number;
 }
 
 export interface CartSummary {

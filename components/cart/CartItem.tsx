@@ -80,7 +80,7 @@ export default function CartItem({ item, compact = false }: CartItemProps) {
             <div className="flex items-center gap-2">
               <QuantitySelector
                 quantity={item.quantity}
-                max={item.stock?.stock ?? 99}
+                max={item.stock ?? 99}
                 onChange={(qty) => updateQuantity(item._id, qty)}
               />
               <button

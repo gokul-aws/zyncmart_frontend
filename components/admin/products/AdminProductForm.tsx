@@ -26,6 +26,7 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const ACCEPTED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
 const ACCEPTED_ACCEPT = ACCEPTED_TYPES.join(',');
 const MAX_IMAGES = 10;
+const MAX_VARIANT_IMAGES = 5;
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -36,6 +37,30 @@ function slugify(str: string): string {
     .replace(/[^\w\s-]/g, '')
     .replace(/[\s_]+/g, '-')
     .replace(/^-+|-+$/g, '');
+}
+
+// Mirrors the backend's duplicate check (validateVariants in
+// productController.js) so the admin gets instant feedback instead of a
+// round-trip 400 — the backend still re-validates and remains the source of truth.
+function findDuplicateVariant(
+  variants: { sku: string; color: string; size: string }[]
+): string | null {
+  const seenSkus = new Set<string>();
+  const seenCombos = new Set<string>();
+  for (const v of variants) {
+    const sku = v.sku.trim().toLowerCase();
+    if (sku && seenSkus.has(sku)) {
+      return `Duplicate SKU "${v.sku}" — each variant needs a unique SKU.`;
+    }
+    seenSkus.add(sku);
+
+    const combo = `${v.color.trim().toLowerCase()}::${v.size.trim().toLowerCase()}`;
+    if (seenCombos.has(combo)) {
+      return `Duplicate variant: "${v.color} / ${v.size}" is already defined.`;
+    }
+    seenCombos.add(combo);
+  }
+  return null;
 }
 
 function validateImageFiles(files: File[]): File[] {
@@ -165,6 +190,87 @@ function toPayload(values: ProductFormValues): ProductCreatePayload {
   };
 }
 
+// ─── Variant image editor (shared by create + edit variant sections) ───────
+// Renders a variant's existing (already-uploaded) images and newly-picked
+// files side by side, each individually removable, plus an "add more"
+// control — up to MAX_VARIANT_IMAGES combined.
+
+interface VariantImageEditorProps {
+  newFiles: { file: File; url: string }[];
+  existingImages: { url: string; publicId: string }[];
+  onAddFiles: (files: File[]) => void;
+  onRemoveNew: (index: number) => void;
+  onRemoveExisting: (publicId: string) => void;
+}
+
+function VariantImageEditor({
+  newFiles,
+  existingImages,
+  onAddFiles,
+  onRemoveNew,
+  onRemoveExisting,
+}: VariantImageEditorProps) {
+  const total = newFiles.length + existingImages.length;
+
+  return (
+    <div className="flex flex-wrap items-start gap-3">
+      {existingImages.map((img) => (
+        <div
+          key={img.publicId || img.url}
+          className="group relative h-24 w-24 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700"
+        >
+          <Image src={img.url} alt="Variant image" fill className="object-cover" />
+          <button
+            type="button"
+            title="Remove image"
+            onClick={() => onRemoveExisting(img.publicId || img.url)}
+            className="absolute right-1 top-1 rounded-full bg-black/50 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </div>
+      ))}
+
+      {newFiles.map((f, i) => (
+        <div
+          key={`${f.file.name}-${i}`}
+          className="group relative h-24 w-24 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700"
+        >
+          <span className="absolute left-1 top-1 z-10 rounded-full bg-emerald-500 px-1.5 py-0.5 text-[9px] font-semibold text-white">
+            New
+          </span>
+          <Image src={f.url} alt={f.file.name} fill className="object-cover" />
+          <button
+            type="button"
+            title="Remove image"
+            onClick={() => onRemoveNew(i)}
+            className="absolute right-1 top-1 rounded-full bg-black/50 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </div>
+      ))}
+
+      {total < MAX_VARIANT_IMAGES && (
+        <label className="flex h-24 w-24 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 text-center transition-colors hover:border-primary hover:bg-primary/5 dark:border-slate-600 dark:hover:border-primary">
+          <Upload className="mb-1 h-5 w-5 text-slate-400" />
+          <span className="text-[10px] leading-tight text-slate-400">Upload</span>
+          <input
+            type="file"
+            accept={ACCEPTED_ACCEPT}
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files) onAddFiles(Array.from(e.target.files));
+              e.target.value = '';
+            }}
+          />
+        </label>
+      )}
+    </div>
+  );
+}
+
 // ─── Props ─────────────────────────────────────────────────────────────────
 
 interface AdminProductFormProps {
@@ -218,8 +324,14 @@ export default function AdminProductForm({
   );
   const [removedImagePublicIds, setRemovedImagePublicIds] = useState<string[]>([]);
 
-  // ── Edit mode: existing variant images (fieldId → { url, publicId? }) ──
-  const [existingVariantImages, setExistingVariantImages] = useState<Record<string, { url: string; publicId?: string }>>({});
+  // ── Edit mode: existing variant images (fieldId → [{ url, publicId }]) ──
+  const [existingVariantImages, setExistingVariantImages] = useState<Record<string, { url: string; publicId: string }[]>>({});
+
+  // Stable fieldId → original backend variant map, populated once when
+  // initialData loads and never recomputed by position — so removing or
+  // reordering variants later can't cause image operations to target the
+  // wrong variant.
+  const originalVariantByFieldId = useRef<Record<string, BackendProductVariant>>({});
 
   // ── Image previews (product-level) ──
   const previews = useMemo(
@@ -348,17 +460,33 @@ export default function AdminProductForm({
     setSlugEdited(true);
   }, [initialData, reset]);
 
-  // ── Initialize existing variant images after variableVariantFields are populated ──
+  // ── Stable key for a variant row: the backend variant _id when it exists,
+  //    otherwise the RHF field id (new, not-yet-saved variants). Using _id
+  //    (rather than array position) means image state stays correctly
+  //    attached to its variant even after other variants are added,
+  //    removed, or reordered. ──
+  const variantKey = (field: { id: string; _id?: string }) => field._id ?? field.id;
+
+  // ── Initialize the original-variant map + existing images ONCE per
+  //    initialData load — deliberately not re-run when variableVariantFields
+  //    changes (add/remove), since that would re-derive by position again. ──
   useEffect(() => {
-    if (!initialData?.variants?.length || !variableVariantFields.length) return;
-    const map: Record<string, { url: string; publicId?: string }> = {};
-    initialData.variants.forEach((bv, idx) => {
-      if (bv.image && variableVariantFields[idx]) {
-        map[variableVariantFields[idx].id] = { url: bv.image };
+    if (!initialData?.variants?.length) return;
+    const byId: Record<string, BackendProductVariant> = {};
+    const imageMap: Record<string, { url: string; publicId: string }[]> = {};
+    for (const v of initialData.variants) {
+      if (!v._id) continue;
+      byId[v._id] = v;
+      const imgs = v.images?.length
+        ? v.images
+        : (v.image ? [{ url: v.image, publicId: '', isPrimary: true }] : []);
+      if (imgs.length) {
+        imageMap[v._id] = imgs.map((img) => ({ url: img.url, publicId: img.publicId ?? '' }));
       }
-    });
-    setExistingVariantImages(map);
-  }, [initialData, variableVariantFields]);
+    }
+    originalVariantByFieldId.current = byId;
+    setExistingVariantImages(imageMap);
+  }, [initialData]);
 
   // ── Auto-generate slug from name when creating ──
   const watchedName = watch('name');
@@ -449,35 +577,42 @@ export default function AdminProductForm({
   const handleExistingDragEnd = () => setExistingDragIndex(null);
 
   // ── Variable variant image management (create + edit) ──
-  const addVariableVariantImage = (fieldId: string, files: File[]) => {
+  // Each variant can carry multiple images (e.g. front/back), capped at
+  // MAX_VARIANT_IMAGES combined existing + newly-added.
+  const addVariableVariantImage = (fieldKey: string, files: File[], existingCount: number) => {
     const validated = validateImageFiles(files);
     if (validated.length === 0) return;
-    setVariableVariantImages((prev) => ({
-      ...prev,
-      [fieldId]: validated.slice(0, 1), // single image per variant
-    }));
+    setVariableVariantImages((prev) => {
+      const current = prev[fieldKey] ?? [];
+      const room = Math.max(0, MAX_VARIANT_IMAGES - existingCount - current.length);
+      if (room === 0) {
+        toast.error(`Maximum ${MAX_VARIANT_IMAGES} images per variant.`);
+        return prev;
+      }
+      return { ...prev, [fieldKey]: [...current, ...validated.slice(0, room)] };
+    });
   };
 
-  const removeVariableVariantImage = (fieldId: string) => {
+  const removeVariableVariantImage = (fieldKey: string, index: number) => {
     setVariableVariantImages((prev) => {
-      const next = { ...prev };
-      delete next[fieldId];
-      return next;
+      const current = prev[fieldKey] ?? [];
+      const next = current.filter((_, i) => i !== index);
+      return { ...prev, [fieldKey]: next };
     });
   };
 
   const handleRemoveVariableVariant = (index: number) => {
-    const fieldId = variableVariantFields[index]?.id;
+    const fieldKey = variableVariantFields[index] ? variantKey(variableVariantFields[index]) : null;
     removeVariableVariant(index);
-    if (fieldId) {
+    if (fieldKey) {
       setVariableVariantImages((prev) => {
         const next = { ...prev };
-        delete next[fieldId];
+        delete next[fieldKey];
         return next;
       });
       setExistingVariantImages((prev) => {
         const next = { ...prev };
-        delete next[fieldId];
+        delete next[fieldKey];
         return next;
       });
     }
@@ -504,12 +639,15 @@ export default function AdminProductForm({
     });
   };
 
-  // ── Edit mode: existing variant image management ──
-  const removeExistingVariantImage = (fieldId: string) => {
+  // ── Edit mode: existing variant image management (remove one image,
+  //    keeping the rest of that variant's images intact). `identity` is
+  //    publicId when the image has one, otherwise its URL — legacy
+  //    single-image variants were migrated with no real Cloudinary publicId. ──
+  const removeExistingVariantImage = (fieldKey: string, identity: string) => {
     setExistingVariantImages((prev) => {
-      const next = { ...prev };
-      delete next[fieldId];
-      return next;
+      const current = prev[fieldKey] ?? [];
+      const next = current.filter((img) => (img.publicId || img.url) !== identity);
+      return { ...prev, [fieldKey]: next };
     });
   };
 
@@ -536,12 +674,19 @@ export default function AdminProductForm({
         toast.error('Add at least one variant for variable products.');
         return;
       }
+      const duplicateError = findDuplicateVariant(values.variableVariants);
+      if (duplicateError) {
+        toast.error(duplicateError);
+        return;
+      }
     }
 
-    // Build variant image files — prefer newly uploaded file, otherwise pass empty
+    // Build variant image files — keyed by the same stable variant key
+    // (backend _id when it exists, else the RHF field id) used everywhere
+    // else, so files always land on the variant they were added to.
     if (effectiveType === 'variable') {
       const orderedVariantFiles = variableVariantFields.map(
-        (f) => variableVariantImages[f.id] ?? []
+        (f) => variableVariantImages[variantKey(f)] ?? []
       );
       await onSubmit(toPayload(values), [], orderedVariantFiles);
     } else {
@@ -565,24 +710,21 @@ export default function AdminProductForm({
           }))
         );
       }
-      // 3. Remove deleted variant images
+      // 3. Remove individually-deleted variant images. Compared against the
+      // stable original-variant map (keyed by backend _id), so this is
+      // correct regardless of how variants were reordered/added/removed —
+      // a variant dropped entirely is cleaned up server-side instead.
       if (onRemoveVariantImage) {
-        const bv = initialData.variants ?? [];
-        for (const [fieldId, _entry] of Object.entries(existingVariantImages)) {
-          // If a field was mapped to a backend variant image and is now cleared,
-          // the entry will be missing from existingVariantImages.
-          // We detect removals by comparing with the original.
-        }
-        // Track variant image removals: fields that had images but now don't
-        for (let idx = 0; idx < variableVariantFields.length; idx++) {
-          const fieldId = variableVariantFields[idx].id;
-          const bv = initialData.variants?.[idx];
-          const hasExisting = existingVariantImages[fieldId] !== undefined;
-          const hasNew = !!variableVariantImages[fieldId]?.length;
-          if (bv?.image && bv._id && !hasExisting && !hasNew) {
-            // User removed the existing variant image
-            const publicId = bv.image.split('/').pop()?.split('.')[0] ?? '';
-            await onRemoveVariantImage(bv._id, publicId);
+        // identity: publicId when present, else the URL (legacy migrated images).
+        const identityOf = (img: { url: string; publicId?: string }) => img.publicId || img.url;
+        for (const [variantId, original] of Object.entries(originalVariantByFieldId.current)) {
+          const originalIdentities = (original.images ?? []).map(identityOf).filter(Boolean);
+          if (!originalIdentities.length) continue;
+          const stillPresent = new Set((existingVariantImages[variantId] ?? []).map(identityOf));
+          for (const identity of originalIdentities) {
+            if (!stillPresent.has(identity)) {
+              await onRemoveVariantImage(variantId, identity);
+            }
           }
         }
       }
@@ -1132,7 +1274,9 @@ export default function AdminProductForm({
 
               <div className="space-y-5">
                 {variableVariantFields.map((field, index) => {
-                  const vFiles = variablePreviews[field.id] ?? [];
+                  const fieldKey = variantKey(field);
+                const vFiles = variablePreviews[fieldKey] ?? [];
+                const vExisting = existingVariantImages[fieldKey] ?? [];
                   const vColorCode = watch(`variableVariants.${index}.colorCode`);
                   return (
                     <motion.div
@@ -1302,65 +1446,18 @@ export default function AdminProductForm({
                         </div>
                       </div>
 
-                      {/* Variant Image */}
+                      {/* Variant Images */}
                       <div className="space-y-2">
                         <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
-                          Image
+                          Images <span className="font-normal text-slate-400">(up to {MAX_VARIANT_IMAGES})</span>
                         </label>
-                        <div className="flex items-start gap-4">
-                          {vFiles.length > 0 ? (
-                            <div className="group relative h-24 w-24 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
-                              <Image
-                                src={vFiles[0].url}
-                                alt={vFiles[0].file.name}
-                                fill
-                                className="object-cover"
-                              />
-                              <button
-                                type="button"
-                                title="Remove image"
-                                onClick={() => removeVariableVariantImage(field.id)}
-                                className="absolute right-1 top-1 rounded-full bg-black/50 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100"
-                              >
-                                <X className="h-3 w-3" />
-                              </button>
-                            </div>
-                          ) : existingVariantImages[field.id] ? (
-                            <div className="group relative h-24 w-24 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
-                              <Image
-                                src={existingVariantImages[field.id].url}
-                                alt="Variant image"
-                                fill
-                                className="object-cover"
-                              />
-                              <button
-                                type="button"
-                                title="Remove image"
-                                onClick={() => removeExistingVariantImage(field.id)}
-                                className="absolute right-1 top-1 rounded-full bg-black/50 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100"
-                              >
-                                <X className="h-3 w-3" />
-                              </button>
-                            </div>
-                          ) : (
-                            <label className="flex h-24 w-24 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 text-center transition-colors hover:border-primary hover:bg-primary/5 dark:border-slate-600 dark:hover:border-primary">
-                              <Upload className="mb-1 h-5 w-5 text-slate-400" />
-                              <span className="text-[10px] leading-tight text-slate-400">
-                                Upload
-                              </span>
-                              <input
-                                type="file"
-                                accept={ACCEPTED_ACCEPT}
-                                className="hidden"
-                                onChange={(e) => {
-                                  if (e.target.files)
-                                    addVariableVariantImage(field.id, Array.from(e.target.files));
-                                  e.target.value = '';
-                                }}
-                              />
-                            </label>
-                          )}
-                        </div>
+                        <VariantImageEditor
+                          newFiles={vFiles}
+                          existingImages={vExisting}
+                          onAddFiles={(files) => addVariableVariantImage(fieldKey, files, vExisting.length)}
+                          onRemoveNew={(i) => removeVariableVariantImage(fieldKey, i)}
+                          onRemoveExisting={(publicId) => removeExistingVariantImage(fieldKey, publicId)}
+                        />
                       </div>
                     </motion.div>
                   );
@@ -1968,7 +2065,9 @@ export default function AdminProductForm({
 
             <div className="space-y-5">
               {variableVariantFields.map((field, index) => {
-                const vFiles = variablePreviews[field.id] ?? [];
+                const fieldKey = variantKey(field);
+                const vFiles = variablePreviews[fieldKey] ?? [];
+                const vExisting = existingVariantImages[fieldKey] ?? [];
                 const vColorCode = watch(`variableVariants.${index}.colorCode`);
                 return (
                   <motion.div
@@ -2138,48 +2237,18 @@ export default function AdminProductForm({
                       </div>
                     </div>
 
-                    {/* Variant Image */}
+                    {/* Variant Images */}
                     <div className="space-y-2">
                       <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
-                        Image
+                        Images <span className="font-normal text-slate-400">(up to {MAX_VARIANT_IMAGES})</span>
                       </label>
-                      <div className="flex items-start gap-4">
-                        {vFiles.length > 0 ? (
-                          <div className="group relative h-24 w-24 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
-                            <Image
-                              src={vFiles[0].url}
-                              alt={vFiles[0].file.name}
-                              fill
-                              className="object-cover"
-                            />
-                            <button
-                              type="button"
-                              title="Remove image"
-                              onClick={() => removeVariableVariantImage(field.id)}
-                              className="absolute right-1 top-1 rounded-full bg-black/50 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          </div>
-                        ) : (
-                          <label className="flex h-24 w-24 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 text-center transition-colors hover:border-primary hover:bg-primary/5 dark:border-slate-600 dark:hover:border-primary">
-                            <Upload className="mb-1 h-5 w-5 text-slate-400" />
-                            <span className="text-[10px] leading-tight text-slate-400">
-                              Upload
-                            </span>
-                            <input
-                              type="file"
-                              accept={ACCEPTED_ACCEPT}
-                              className="hidden"
-                              onChange={(e) => {
-                                if (e.target.files)
-                                  addVariableVariantImage(field.id, Array.from(e.target.files));
-                                e.target.value = '';
-                              }}
-                            />
-                          </label>
-                        )}
-                      </div>
+                      <VariantImageEditor
+                        newFiles={vFiles}
+                        existingImages={vExisting}
+                        onAddFiles={(files) => addVariableVariantImage(fieldKey, files, vExisting.length)}
+                        onRemoveNew={(i) => removeVariableVariantImage(fieldKey, i)}
+                        onRemoveExisting={(publicId) => removeExistingVariantImage(fieldKey, publicId)}
+                      />
                     </div>
                   </motion.div>
                 );

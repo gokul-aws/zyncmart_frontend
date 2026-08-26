@@ -1,36 +1,36 @@
 'use client';
 
-import type { ColorVariant } from '@/types/product';
+import type { ColorOption } from '@/hooks/useProduct';
 
 interface ProductColorSelectorProps {
-  colorVariants: ColorVariant[];
-  selected: ColorVariant | null;
-  onChange: (variant: ColorVariant) => void;
+  colors: ColorOption[];
+  selected: string | null;
+  onChange: (colorName: string) => void;
 }
 
 export default function ProductColorSelector({
-  colorVariants,
+  colors,
   selected,
   onChange,
 }: ProductColorSelectorProps) {
-  if (!colorVariants?.length) return null;
+  if (!colors?.length) return null;
 
   return (
     <div>
       <p className="text-sm font-medium text-gray-700 mb-2">
-        Color: <span className="font-semibold text-gray-900">{selected?.color}</span>
+        Color: <span className="font-semibold text-gray-900">{selected}</span>
       </p>
       <div className="flex flex-wrap gap-2">
-        {colorVariants.map((variant) => {
-          const isSelected = selected?._id === variant._id;
-          const isOutOfStock = variant.stock === 0;
+        {colors.map((color) => {
+          const isSelected = selected === color.name;
+          const isOutOfStock = color.stock === 0;
 
           return (
             <button
-              key={variant._id}
+              key={color.name}
               type="button"
-              onClick={() => onChange(variant)}
-              aria-label={variant.color}
+              onClick={() => onChange(color.name)}
+              aria-label={color.name}
               aria-pressed={isSelected}
               className={`flex items-center gap-2 rounded-md border px-3.5 py-1.5 text-sm font-medium transition-colors ${
                 isSelected
@@ -38,13 +38,13 @@ export default function ProductColorSelector({
                   : 'border-gray-300 bg-white text-gray-700 hover:border-gray-500'
               } ${isOutOfStock && !isSelected ? 'text-gray-400' : ''}`}
             >
-              {variant.colorCode && (
+              {color.code && (
                 <span
                   className="h-3.5 w-3.5 rounded-full border border-black/10 shrink-0"
-                  style={{ backgroundColor: variant.colorCode }}
+                  style={{ backgroundColor: color.code }}
                 />
               )}
-              {variant.color}
+              {color.name}
               {isOutOfStock && <span className="text-xs">(Out of stock)</span>}
             </button>
           );

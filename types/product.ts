@@ -22,6 +22,9 @@ export interface BackendProductVariant {
   price: number;
   originalPrice?: number;
   stock: number;
+  // Each variant can carry multiple images (e.g. front/back).
+  images?: ProductImage[];
+  /** @deprecated legacy single-image field — normalized into `images` by the backend on read */
   image?: string;
 }
 

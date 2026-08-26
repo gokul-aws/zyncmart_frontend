@@ -165,6 +165,7 @@ export default function CheckoutClient() {
                   onContinue={handleAddressContinue}
                   onShippingChange={setCheckoutShipping}
                   initialPincode={checkoutShipping.pincode}
+                  subtotal={subtotal}
                 />
               )}
               {currentStep === 'payment' && shippingAddress && (
