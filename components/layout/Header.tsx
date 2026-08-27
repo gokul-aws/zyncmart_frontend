@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { ShoppingCart, User, Search, Heart, Menu, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useCartStore } from '@/lib/store/cartStore';
+import { useWishlistStore } from '@/lib/store/wishlistStore';
 import { useAuthStore } from '@/lib/store/authStore';
 import HeaderSearchPanel from './HeaderSearchPanel';
 
@@ -39,6 +40,7 @@ export default function Header() {
     state.items.reduce((sum, item) => sum + item.quantity, 0)
   );
   const toggleCartDrawer = useCartStore((state) => state.toggleDrawer);
+  const wishlistCount = useWishlistStore((state) => state.items.length);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated());
   const isAdmin = useAuthStore((state) => state.user?.role === 'admin');
 
@@ -111,16 +113,22 @@ export default function Header() {
 
             <Link
               href="/account/wishlist"
-              aria-label="Wishlist"
-              className="hidden sm:flex p-2 text-white/70 hover:text-white rounded-full hover:bg-white/10 transition-colors"
+              aria-label={`Wishlist — ${wishlistCount} item${wishlistCount !== 1 ? 's' : ''}`}
+              className="relative flex p-2 text-white/70 hover:text-white rounded-full hover:bg-white/10 transition-colors"
             >
               <Heart className="w-5 h-5" />
+              {wishlistCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 bg-accent text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                  {wishlistCount > 99 ? '99+' : wishlistCount}
+                </span>
+              )}
             </Link>
 
+            {/* Cart lives in the mobile bottom nav below md; keep it here for desktop only */}
             <button
               onClick={toggleCartDrawer}
               aria-label={`Cart — ${itemCount} item${itemCount !== 1 ? 's' : ''}`}
-              className="relative p-2 text-white/70 hover:text-white rounded-full hover:bg-white/10 transition-colors"
+              className="relative hidden md:flex p-2 text-white/70 hover:text-white rounded-full hover:bg-white/10 transition-colors"
             >
               <ShoppingCart className="w-5 h-5" />
               {itemCount > 0 && (

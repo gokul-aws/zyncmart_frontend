@@ -58,6 +58,14 @@ export default function CheckoutClient() {
     state: '',
     shippingCharge: 0,
   });
+  // Set once a Razorpay order has been created for this checkout attempt.
+  // Retrying after a dismissed/failed payment reuses it (POST /payments/create-order
+  // is idempotent per order) instead of placing a brand-new order — otherwise
+  // every retry click would deduct stock again for an order that never gets paid.
+  const [pendingRazorpayOrder, setPendingRazorpayOrder] = useState<{
+    _id: string;
+    orderNumber: string;
+  } | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -100,17 +108,24 @@ export default function CheckoutClient() {
     if (!shippingAddress) return;
 
     let order;
-    try {
-      order = await createOrder({
-        items: cartItemsToOrderItems(items),
-        shippingAddress,
-        paymentMethod,
-        pricing,
-        couponCode: coupon ?? undefined,
-      });
-    } catch {
-      toast.error('Failed to place order. Please try again.');
-      return;
+    if (paymentMethod === 'razorpay' && pendingRazorpayOrder) {
+      order = pendingRazorpayOrder;
+    } else {
+      try {
+        order = await createOrder({
+          items: cartItemsToOrderItems(items),
+          shippingAddress,
+          paymentMethod,
+          pricing,
+          couponCode: coupon ?? undefined,
+        });
+      } catch {
+        toast.error('Failed to place order. Please try again.');
+        return;
+      }
+      if (paymentMethod === 'razorpay') {
+        setPendingRazorpayOrder({ _id: order._id, orderNumber: order.orderNumber });
+      }
     }
 
     if (paymentMethod === 'cod') {
@@ -122,7 +137,8 @@ export default function CheckoutClient() {
     try {
       await initiatePayment(order._id, order.orderNumber, clearCheckoutItems, shippingAddress.phone);
     } catch {
-      // errors are toasted inside initiatePayment; order already created
+      // errors are toasted inside initiatePayment; order already created — the next
+      // "Pay" click retries this same order instead of placing a new one.
     }
   });
 

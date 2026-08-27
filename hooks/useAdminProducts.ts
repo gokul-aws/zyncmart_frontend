@@ -30,7 +30,7 @@ import type {
  * server-rendered pages — homepage, listing, PDP — stop serving the
  * pre-mutation snapshot instead of waiting out its 1-hour ISR ceiling).
  */
-function invalidateStorefrontQueries(qc: ReturnType<typeof useQueryClient>, slug?: string) {
+export function invalidateStorefrontQueries(qc: ReturnType<typeof useQueryClient>, slug?: string) {
   qc.invalidateQueries({ queryKey: ['products'] });
   qc.invalidateQueries({ queryKey: ['product-search'] });
   qc.invalidateQueries({ queryKey: ['wishlist-products'] });

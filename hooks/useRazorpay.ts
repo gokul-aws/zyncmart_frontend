@@ -12,6 +12,14 @@ declare global {
   }
 }
 
+interface RazorpayCheckoutConfig {
+  display: {
+    blocks: Record<string, { name: string; instruments: Array<{ method: string }> }>;
+    sequence: string[];
+    preferences: { show_default_blocks: boolean };
+  };
+}
+
 interface RazorpayOptions {
   key: string;
   amount: number;
@@ -25,11 +33,12 @@ interface RazorpayOptions {
   theme?: { color?: string };
   modal?: { ondismiss?: () => void };
   customer_id?: string;
+  config?: RazorpayCheckoutConfig;
 }
 
 interface RazorpayInstance {
   open(): void;
-  on(event: string, handler: () => void): void;
+  on(event: 'payment.failed', handler: (response: RazorpayFailureResponse) => void): void;
 }
 
 interface RazorpayResponse {
@@ -38,8 +47,41 @@ interface RazorpayResponse {
   razorpay_signature: string;
 }
 
+// Shape of the event Razorpay's checkout.js emits on `payment.failed` — never
+// includes raw card/CVV data, only the gateway's own error metadata, so it's
+// safe to log for debugging.
+interface RazorpayFailureResponse {
+  error: {
+    code: string;
+    description: string;
+    source?: string;
+    step?: string;
+    reason?: string;
+    metadata?: { order_id?: string; payment_id?: string };
+  };
+}
+
 const SITE_NAME = process.env.NEXT_PUBLIC_SITE_NAME ?? 'Store';
 const RAZORPAY_KEY = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ?? '';
+
+// We only accept Cards and UPI — this is Razorpay's documented
+// config.display mechanism for restricting Checkout's payment method list
+// (not a CSS hide, which Razorpay still renders and can flash before styles
+// apply). `show_default_blocks: false` means ONLY the blocks listed below
+// are shown — Netbanking/Wallets/EMI/Pay Later never appear.
+// https://razorpay.com/docs/payments/payment-gateway/web-integration/standard/configure-payment-methods/
+const CHECKOUT_METHODS_CONFIG: RazorpayCheckoutConfig = {
+  display: {
+    blocks: {
+      recommended: {
+        name: 'Pay via UPI or Card',
+        instruments: [{ method: 'upi' }, { method: 'card' }],
+      },
+    },
+    sequence: ['block.recommended'],
+    preferences: { show_default_blocks: false },
+  },
+};
 
 export function useRazorpay() {
   const router = useRouter();
@@ -105,11 +147,22 @@ export function useRazorpay() {
             reject(new Error('dismissed'));
           },
         },
+        config: CHECKOUT_METHODS_CONFIG,
       };
 
       const rzp = new window.Razorpay(options);
-      rzp.on('payment.failed', () => {
-        toast.error('Payment failed. Please try again.');
+      rzp.on('payment.failed', (response) => {
+        const { code, description, reason, metadata } = response.error ?? {};
+        // Non-sensitive gateway metadata only (order/payment IDs, error
+        // code/reason) — never card numbers, CVV, or the Razorpay secret.
+        console.error('[razorpay] payment.failed', {
+          razorpayOrderId: metadata?.order_id ?? razorpayOrderId,
+          razorpayPaymentId: metadata?.payment_id,
+          code,
+          reason,
+          description,
+        });
+        toast.error(description || 'Payment failed. Please try again.');
         reject(new Error('payment_failed'));
       });
       rzp.open();
