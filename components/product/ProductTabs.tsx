@@ -1,75 +1,67 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Product } from '@/types/product';
+import Tabs from '@/components/ui/Tabs';
 import ProductReviews from './ProductReviews';
-
-type Tab = 'description' | 'specifications' | 'reviews';
+import { SHOW_REVIEWS_EVENT } from './ProductInfo';
 
 interface ProductTabsProps {
   product: Product;
 }
 
-const TABS: { key: Tab; label: (p: Product) => string }[] = [
-  { key: 'description', label: () => 'Description' },
-  { key: 'specifications', label: () => 'Specifications' },
-  { key: 'reviews', label: (p) => `Reviews (${p.ratings.count})` },
-];
-
 export default function ProductTabs({ product }: ProductTabsProps) {
-  const [active, setActive] = useState<Tab>('description');
+  const [active, setActive] = useState('description');
+
+  // "N reviews" link in the purchase panel opens this tab.
+  useEffect(() => {
+    const open = () => setActive('reviews');
+    window.addEventListener(SHOW_REVIEWS_EVENT, open);
+    return () => window.removeEventListener(SHOW_REVIEWS_EVENT, open);
+  }, []);
 
   const specs: { label: string; value: string }[] = [
-    { label: 'SKU', value: product.sku },
+    ...(product.sku ? [{ label: 'SKU', value: product.sku }] : []),
     { label: 'Category', value: product.category.name },
     ...(product.brand ? [{ label: 'Brand', value: product.brand }] : []),
-    { label: 'Availability', value: product.stock > 0 ? `In Stock (${product.stock} units)` : 'Out of Stock' },
-    ...(product.variants?.length ? [{ label: 'Variants', value: `${product.variants.length} options available` }] : []),
+    { label: 'Availability', value: product.stock > 0 ? `In stock (${product.stock} units)` : 'Out of stock' },
+    ...(product.variants?.length ? [{ label: 'Options', value: `${product.variants.length} colour/size options` }] : []),
     ...(product.tags.length ? [{ label: 'Tags', value: product.tags.join(', ') }] : []),
   ];
 
   return (
-    <div id="reviews">
-      {/* Tab bar */}
-      <div className="flex border-b border-gray-200 overflow-x-auto scrollbar-hide">
-        {TABS.map(({ key, label }) => (
-          <button
-            key={key}
-            onClick={() => setActive(key)}
-            className={`shrink-0 px-5 py-3 text-sm font-medium transition-colors border-b-2 -mb-px ${
-              active === key
-                ? 'border-primary text-primary'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
-          >
-            {label(product)}
-          </button>
-        ))}
-      </div>
-
-      {/* Content */}
-      <div className="py-6">
-        {active === 'description' && (
-          <div className="text-gray-700 text-base leading-7 max-w-3xl whitespace-pre-wrap">
-            {product.description}
-          </div>
-        )}
-
-        {active === 'specifications' && (
-          <div className="max-w-lg">
-            <dl className="divide-y divide-gray-100 border border-gray-200 rounded-xl overflow-hidden">
-              {specs.map(({ label, value }) => (
-                <div key={label} className="flex px-4 py-3 text-sm bg-white even:bg-gray-50">
-                  <dt className="w-36 shrink-0 text-gray-500">{label}</dt>
-                  <dd className="font-medium text-gray-900">{value}</dd>
-                </div>
-              ))}
-            </dl>
-          </div>
-        )}
-
-        {active === 'reviews' && <ProductReviews ratings={product.ratings} productSlug={product.slug} />}
-      </div>
-    </div>
+    <section id="product-details" aria-label="Product details" className="scroll-mt-24">
+      <Tabs
+        label="Product details"
+        active={active}
+        onChange={setActive}
+        items={[
+          {
+            key: 'description',
+            label: 'Description',
+            content: <div className="max-w-3xl whitespace-pre-wrap text-base leading-7 text-foreground/90">{product.description}</div>,
+          },
+          {
+            key: 'specifications',
+            label: 'Specifications',
+            content: (
+              <dl className="max-w-lg divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface">
+                {specs.map(({ label, value }) => (
+                  <div key={label} className="flex gap-4 px-4 py-3 text-sm">
+                    <dt className="w-32 shrink-0 text-muted-foreground">{label}</dt>
+                    <dd className="min-w-0 font-medium text-foreground">{value}</dd>
+                  </div>
+                ))}
+              </dl>
+            ),
+          },
+          {
+            key: 'reviews',
+            label: `Reviews (${product.ratings.count})`,
+            content: <ProductReviews ratings={product.ratings} productSlug={product.slug} />,
+          },
+        ]}
+      />
+    </section>
   );
 }

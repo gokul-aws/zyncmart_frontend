@@ -1,10 +1,6 @@
 const TAMIL_NADU = 'Tamil Nadu';
 const TN_SHIPPING = 40;
 const DEFAULT_SHIPPING = 60;
-// Must match calculateShipping() in the backend (services/shipping.js) —
-// this is a display estimate only; the server always computes the charge
-// actually billed, but a mismatched threshold would show a misleading total.
-const FREE_SHIPPING_THRESHOLD = 999;
 
 export function validatePincode(pincode: string): boolean {
   return /^\d{6}$/.test(pincode);
@@ -26,7 +22,6 @@ export async function lookupPincodeState(pincode: string): Promise<string | null
   }
 }
 
-export function calculateShippingCharge(state: string, subtotal = 0): number {
-  if (subtotal >= FREE_SHIPPING_THRESHOLD) return 0;
+export function calculateShippingCharge(state: string): number {
   return state === TAMIL_NADU ? TN_SHIPPING : DEFAULT_SHIPPING;
 }

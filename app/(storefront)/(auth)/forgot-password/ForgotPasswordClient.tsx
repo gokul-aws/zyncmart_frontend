@@ -8,8 +8,13 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { CheckCircle2 } from 'lucide-react';
 import { forgotPassword, resetPassword } from '@/lib/api/auth';
-import { passwordSchema } from '@/lib/validation';
-import { useSubmitGuard } from '@/hooks/useSubmitGuard';
+import { getApiError } from '@/lib/api/orders';
+import AuthCard from '@/components/auth/AuthCard';
+import Field from '@/components/ui/Field';
+import { Input } from '@/components/ui/Input';
+import PasswordInput from '@/components/ui/PasswordInput';
+import Button from '@/components/ui/Button';
+import Alert from '@/components/ui/Alert';
 
 const emailSchema = z.object({ email: z.string().email('Enter a valid email') });
 type EmailFormData = z.infer<typeof emailSchema>;
@@ -17,7 +22,7 @@ type EmailFormData = z.infer<typeof emailSchema>;
 const resetSchema = z
   .object({
     otp: z.string().regex(/^\d{6}$/, 'Enter the 6-digit code'),
-    password: passwordSchema,
+    password: z.string().min(8, 'Password must be at least 8 characters'),
     confirmPassword: z.string(),
   })
   .refine((d) => d.password === d.confirmPassword, {
@@ -34,7 +39,6 @@ export default function ForgotPasswordClient() {
   const [resending, setResending] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const [resendMessage, setResendMessage] = useState<string | null>(null);
-  const guard = useSubmitGuard();
 
   const {
     register: registerEmail,
@@ -48,7 +52,7 @@ export default function ForgotPasswordClient() {
     formState: { errors: resetErrors },
   } = useForm<ResetFormData>({ resolver: zodResolver(resetSchema) });
 
-  const onSendCode = (data: EmailFormData) => guard(async () => {
+  const onSendCode = async (data: EmailFormData) => {
     setLoading(true);
     setApiError(null);
     try {
@@ -59,27 +63,23 @@ export default function ForgotPasswordClient() {
     } finally {
       setLoading(false);
     }
-  });
+  };
 
-  const onResetPassword = (data: ResetFormData) => guard(async () => {
+  const onResetPassword = async (data: ResetFormData) => {
     if (!pendingEmail) return;
     setLoading(true);
     setApiError(null);
     try {
       await resetPassword(pendingEmail, data.otp, data.password);
       setDone(true);
-    } catch (err: unknown) {
-      const message =
-        err && typeof err === 'object' && 'response' in err
-          ? (err as { response?: { data?: { error?: string } } }).response?.data?.error
-          : undefined;
-      setApiError(message || 'Invalid or expired code. Please try again.');
+    } catch (err) {
+      setApiError(getApiError(err, 'Invalid or expired code. Please try again.').message);
     } finally {
       setLoading(false);
     }
-  });
+  };
 
-  const handleResend = () => guard(async () => {
+  const handleResend = async () => {
     if (!pendingEmail) return;
     setResending(true);
     setResendMessage(null);
@@ -91,187 +91,95 @@ export default function ForgotPasswordClient() {
     } finally {
       setResending(false);
     }
-  });
+  };
 
   if (done) {
     return (
-      <div className="min-h-[80vh] flex items-center justify-center px-4 py-12">
-        <div className="w-full max-w-md">
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center">
-            <CheckCircle2 className="w-12 h-12 text-success mx-auto mb-3" />
-            <h2 className="text-xl font-bold text-gray-900 mb-2">Password reset</h2>
-            <p className="text-sm text-gray-500 mb-6">
-              Your password has been reset successfully. Please sign in with your new password.
-            </p>
-            <button
-              type="button"
-              onClick={() => router.push('/login')}
-              className="w-full py-3 bg-primary text-white font-semibold rounded-xl hover:bg-primary-dark transition-colors"
-            >
-              Back to Login
-            </button>
-          </div>
+      <AuthCard title="Password updated" description="Your password has been reset. You can now sign in with your new password.">
+        <div className="mb-6 flex justify-center">
+          <CheckCircle2 className="h-12 w-12 text-success" aria-hidden="true" />
         </div>
-      </div>
+        <Button size="lg" fullWidth onClick={() => router.push('/login')}>
+          Back to sign in
+        </Button>
+      </AuthCard>
     );
   }
 
   if (pendingEmail) {
     return (
-      <div className="min-h-[80vh] flex items-center justify-center px-4 py-12">
-        <div className="w-full max-w-md">
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-            <h1 className="text-2xl font-bold text-gray-900 mb-1">Enter your code</h1>
-            <p className="text-sm text-gray-500 mb-6">
-              We&apos;ve sent a 6-digit code to{' '}
-              <span className="font-medium text-gray-700">{pendingEmail}</span>. Enter it below
-              along with your new password.
-            </p>
+      <AuthCard
+        title="Enter your code"
+        description={
+          <>
+            If an account exists for <span className="font-medium text-foreground">{pendingEmail}</span>, we&apos;ve sent a 6-digit code to it. Enter it with your new password.
+          </>
+        }
+        footer={
+          <Link href="/login" className="font-semibold text-primary hover:underline">
+            Back to sign in
+          </Link>
+        }
+      >
+        {apiError && (
+          <Alert variant="error" live className="mb-5">
+            {apiError}
+          </Alert>
+        )}
+        {resendMessage && (
+          <Alert variant="success" live className="mb-5">
+            {resendMessage}
+          </Alert>
+        )}
 
-            {apiError && (
-              <div className="mb-4 px-4 py-3 bg-red-50 border border-red-100 rounded-lg text-sm text-error whitespace-pre-line">
-                {apiError}
-              </div>
-            )}
-            {resendMessage && (
-              <div className="mb-4 px-4 py-3 bg-green-50 border border-green-100 rounded-lg text-sm text-green-700">
-                {resendMessage}
-              </div>
-            )}
+        <form onSubmit={handleResetSubmit(onResetPassword)} className="space-y-5" noValidate>
+          <Field label="Verification code" error={resetErrors.otp?.message}>
+            <Input {...registerReset('otp')} type="text" inputMode="numeric" maxLength={6} autoComplete="one-time-code" className="text-center text-lg tracking-[0.4em]" />
+          </Field>
+          <Field label="New password" error={resetErrors.password?.message} hint="At least 8 characters">
+            <PasswordInput {...registerReset('password')} autoComplete="new-password" />
+          </Field>
+          <Field label="Confirm new password" error={resetErrors.confirmPassword?.message}>
+            <PasswordInput {...registerReset('confirmPassword')} autoComplete="new-password" />
+          </Field>
+          <Button type="submit" size="lg" fullWidth loading={loading}>
+            {loading ? 'Resetting…' : 'Reset password'}
+          </Button>
+        </form>
 
-            <form onSubmit={handleResetSubmit(onResetPassword)} className="space-y-4" noValidate>
-              <div>
-                <label htmlFor="reset-otp" className="block text-sm font-medium text-gray-700 mb-1">
-                  Verification code
-                </label>
-                <input
-                  {...registerReset('otp')}
-                  id="reset-otp"
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={6}
-                  autoComplete="one-time-code"
-                  placeholder="123456"
-                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm tracking-[0.3em] text-center focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                />
-                {resetErrors.otp && <p className="mt-1 text-xs text-error">{resetErrors.otp.message}</p>}
-              </div>
-
-              <div>
-                <label htmlFor="reset-password" className="block text-sm font-medium text-gray-700 mb-1">New password</label>
-                <input
-                  {...registerReset('password')}
-                  id="reset-password"
-                  type="password"
-                  autoComplete="new-password"
-                  placeholder="••••••••"
-                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                />
-                {resetErrors.password ? (
-                  <p className="mt-1 text-xs text-error">{resetErrors.password.message}</p>
-                ) : (
-                  <p className="mt-1 text-xs text-gray-400">
-                    At least 8 characters, with uppercase, lowercase, a number, and a special character.
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label htmlFor="reset-confirm-password" className="block text-sm font-medium text-gray-700 mb-1">Confirm password</label>
-                <input
-                  {...registerReset('confirmPassword')}
-                  id="reset-confirm-password"
-                  type="password"
-                  autoComplete="new-password"
-                  placeholder="••••••••"
-                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                />
-                {resetErrors.confirmPassword && (
-                  <p className="mt-1 text-xs text-error">{resetErrors.confirmPassword.message}</p>
-                )}
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-3 bg-primary text-white font-semibold rounded-xl hover:bg-primary-dark transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {loading ? 'Resetting…' : 'Reset Password'}
-              </button>
-            </form>
-
-            <p className="mt-6 text-center text-sm text-gray-500">
-              Didn&apos;t get the code?{' '}
-              <button
-                type="button"
-                onClick={handleResend}
-                disabled={resending}
-                className="font-medium text-primary hover:underline disabled:opacity-60"
-              >
-                {resending ? 'Resending…' : 'Resend code'}
-              </button>
-            </p>
-
-            <p className="mt-2 text-center text-sm text-gray-500">
-              <button
-                type="button"
-                onClick={() => setPendingEmail(null)}
-                className="font-medium text-gray-600 hover:underline"
-              >
-                Use a different email
-              </button>
-            </p>
-          </div>
-        </div>
-      </div>
+        <p className="mt-5 text-center text-sm text-muted-foreground">
+          Didn&apos;t get the code?{' '}
+          <button type="button" onClick={handleResend} disabled={resending} className="font-semibold text-primary hover:underline disabled:opacity-60">
+            {resending ? 'Resending…' : 'Resend code'}
+          </button>
+        </p>
+      </AuthCard>
     );
   }
 
   return (
-    <div className="min-h-[80vh] flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-          <h1 className="text-2xl font-bold text-gray-900 mb-1">Forgot password</h1>
-          <p className="text-sm text-gray-500 mb-6">
-            Enter your email and we&apos;ll send you a verification code.
-          </p>
-
-          {apiError && (
-            <div className="mb-4 px-4 py-3 bg-red-50 border border-red-100 rounded-lg text-sm text-error">
-              {apiError}
-            </div>
-          )}
-
-          <form onSubmit={handleEmailSubmit(onSendCode)} className="space-y-4" noValidate>
-            <div>
-              <label htmlFor="forgot-email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-              <input
-                {...registerEmail('email')}
-                id="forgot-email"
-                type="email"
-                autoComplete="email"
-                className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                placeholder="you@example.com"
-              />
-              {emailErrors.email && <p className="mt-1 text-xs text-error">{emailErrors.email.message}</p>}
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3 bg-primary text-white font-semibold rounded-xl hover:bg-primary-dark transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {loading ? 'Sending…' : 'Send Code'}
-            </button>
-          </form>
-
-          <p className="mt-6 text-center text-sm text-gray-500">
-            <Link href="/login" className="font-medium text-primary hover:underline">
-              Back to Login
-            </Link>
-          </p>
-        </div>
-      </div>
-    </div>
+    <AuthCard
+      title="Forgot your password?"
+      description="Enter your account email and we'll send you a 6-digit code to reset it."
+      footer={
+        <Link href="/login" className="font-semibold text-primary hover:underline">
+          Back to sign in
+        </Link>
+      }
+    >
+      {apiError && (
+        <Alert variant="error" live className="mb-5">
+          {apiError}
+        </Alert>
+      )}
+      <form onSubmit={handleEmailSubmit(onSendCode)} className="space-y-5" noValidate>
+        <Field label="Email" error={emailErrors.email?.message}>
+          <Input {...registerEmail('email')} type="email" inputMode="email" autoComplete="email" />
+        </Field>
+        <Button type="submit" size="lg" fullWidth loading={loading}>
+          {loading ? 'Sending code…' : 'Send code'}
+        </Button>
+      </form>
+    </AuthCard>
   );
 }

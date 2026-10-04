@@ -6,14 +6,19 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useAuth } from '@/hooks/useAuth';
-import { passwordSchema } from '@/lib/validation';
+import AuthCard from '@/components/auth/AuthCard';
+import Field from '@/components/ui/Field';
+import { Input } from '@/components/ui/Input';
+import PasswordInput from '@/components/ui/PasswordInput';
+import Button from '@/components/ui/Button';
+import Alert from '@/components/ui/Alert';
 
 const schema = z
   .object({
     name: z.string().min(2, 'Name must be at least 2 characters'),
     email: z.string().email('Enter a valid email'),
     phone: z.string().regex(/^[6-9]\d{9}$/, 'Enter a valid 10-digit Indian mobile number'),
-    password: passwordSchema,
+    password: z.string().min(8, 'Password must be at least 8 characters'),
     confirmPassword: z.string(),
     terms: z.literal(true, { error: 'You must accept the terms' }),
   })
@@ -74,162 +79,117 @@ export default function RegisterClient() {
 
   if (pendingEmail) {
     return (
-      <div className="min-h-[80vh] flex items-center justify-center px-4 py-12">
-        <div className="w-full max-w-md">
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-            <h1 className="text-2xl font-bold text-gray-900 mb-1">Verify your email</h1>
-            <p className="text-sm text-gray-500 mb-6">
-              We&apos;ve sent a 6-digit code to{' '}
-              <span className="font-medium text-gray-700">{pendingEmail}</span>. Enter it below to
-              finish creating your account.
-            </p>
+      <AuthCard
+        title="Verify your email"
+        description={
+          <>
+            We&apos;ve sent a 6-digit code to <span className="font-medium text-foreground">{pendingEmail}</span>. Enter it below to finish creating your account.
+          </>
+        }
+        footer={
+          <button type="button" onClick={() => setPendingEmail(null)} className="font-semibold text-primary hover:underline">
+            Use a different email
+          </button>
+        }
+      >
+        {error && (
+          <Alert variant="error" live className="mb-5 whitespace-pre-line">
+            {error}
+          </Alert>
+        )}
+        {resendMessage && (
+          <Alert variant="success" live className="mb-5">
+            {resendMessage}
+          </Alert>
+        )}
 
-            {error && (
-              <div className="mb-4 px-4 py-3 bg-red-50 border border-red-100 rounded-lg text-sm text-error whitespace-pre-line">
-                {error}
-              </div>
-            )}
-            {resendMessage && (
-              <div className="mb-4 px-4 py-3 bg-green-50 border border-green-100 rounded-lg text-sm text-green-700">
-                {resendMessage}
-              </div>
-            )}
+        <form onSubmit={handleOtpSubmit(onVerifyOtp)} className="space-y-5" noValidate>
+          <Field label="Verification code" error={otpErrors.otp?.message}>
+            <Input {...registerOtp('otp')} type="text" inputMode="numeric" maxLength={6} autoComplete="one-time-code" className="text-center text-lg tracking-[0.4em]" />
+          </Field>
 
-            <form onSubmit={handleOtpSubmit(onVerifyOtp)} className="space-y-4" noValidate>
-              <div>
-                <label htmlFor="otp" className="block text-sm font-medium text-gray-700 mb-1">
-                  Verification code
-                </label>
-                <input
-                  {...registerOtp('otp')}
-                  id="otp"
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={6}
-                  autoComplete="one-time-code"
-                  placeholder="123456"
-                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm tracking-[0.3em] text-center focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                />
-                {otpErrors.otp && (
-                  <p className="mt-1 text-xs text-error">{otpErrors.otp.message}</p>
-                )}
-              </div>
+          <Button type="submit" size="lg" fullWidth loading={loading}>
+            {loading ? 'Verifying…' : 'Verify & create account'}
+          </Button>
+        </form>
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-3 bg-primary text-white font-semibold rounded-xl hover:bg-primary-dark transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {loading ? 'Verifying…' : 'Verify & Create Account'}
-              </button>
-            </form>
-
-            <p className="mt-6 text-center text-sm text-gray-500">
-              Didn&apos;t get the code?{' '}
-              <button
-                type="button"
-                onClick={handleResend}
-                disabled={resending}
-                className="font-medium text-primary hover:underline disabled:opacity-60"
-              >
-                {resending ? 'Resending…' : 'Resend code'}
-              </button>
-            </p>
-
-            <p className="mt-2 text-center text-sm text-gray-500">
-              <button
-                type="button"
-                onClick={() => setPendingEmail(null)}
-                className="font-medium text-gray-600 hover:underline"
-              >
-                Use a different email
-              </button>
-            </p>
-          </div>
-        </div>
-      </div>
+        <p className="mt-5 text-center text-sm text-muted-foreground">
+          Didn&apos;t get the code?{' '}
+          <button type="button" onClick={handleResend} disabled={resending} className="font-semibold text-primary hover:underline disabled:opacity-60">
+            {resending ? 'Resending…' : 'Resend code'}
+          </button>
+        </p>
+      </AuthCard>
     );
   }
 
   return (
-    <div className="min-h-[80vh] flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-          <h1 className="text-2xl font-bold text-gray-900 mb-1">Create account</h1>
-          <p className="text-sm text-gray-500 mb-6">Start shopping in seconds</p>
+    <AuthCard
+      title="Create your account"
+      description="It only takes a minute."
+      footer={
+        <>
+          Already have an account?{' '}
+          <Link href="/login" className="font-semibold text-primary hover:underline">
+            Sign in
+          </Link>
+        </>
+      }
+    >
+      {error && (
+        <Alert variant="error" live className="mb-5 whitespace-pre-line">
+          {error}
+        </Alert>
+      )}
 
-          {error && (
-            <div className="mb-4 px-4 py-3 bg-red-50 border border-red-100 rounded-lg text-sm text-error whitespace-pre-line">
-              {error}
-            </div>
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
+        <Field label="Full name" required error={errors.name?.message}>
+          <Input {...register('name')} autoComplete="name" />
+        </Field>
+        <Field label="Email" required error={errors.email?.message}>
+          <Input {...register('email')} type="email" inputMode="email" autoComplete="email" />
+        </Field>
+        <Field label="Mobile number" required error={errors.phone?.message} hint="10-digit Indian mobile number">
+          <Input {...register('phone')} type="tel" inputMode="numeric" maxLength={10} autoComplete="tel-national" />
+        </Field>
+        <Field label="Password" required error={errors.password?.message} hint="At least 8 characters">
+          <PasswordInput {...register('password')} autoComplete="new-password" />
+        </Field>
+        <Field label="Confirm password" required error={errors.confirmPassword?.message}>
+          <PasswordInput {...register('confirmPassword')} autoComplete="new-password" />
+        </Field>
+
+        <div>
+          <label className="flex min-h-11 cursor-pointer items-start gap-3 py-2 text-sm text-muted-foreground">
+            <input
+              {...register('terms')}
+              type="checkbox"
+              className="mt-0.5 h-5 w-5 shrink-0 rounded accent-primary"
+              aria-invalid={errors.terms ? true : undefined}
+              aria-describedby={errors.terms ? 'terms-error' : undefined}
+            />
+            <span>
+              I agree to the{' '}
+              <Link href="/policies/terms" className="font-medium text-primary hover:underline">
+                Terms &amp; conditions
+              </Link>{' '}
+              and{' '}
+              <Link href="/policies/privacy" className="font-medium text-primary hover:underline">
+                Privacy policy
+              </Link>
+            </span>
+          </label>
+          {errors.terms && (
+            <p id="terms-error" className="text-sm font-medium text-error">
+              {errors.terms.message}
+            </p>
           )}
-
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
-            {[
-              { name: 'name', label: 'Full Name', type: 'text', placeholder: 'Priya Sharma', autocomplete: 'name' },
-              { name: 'email', label: 'Email', type: 'email', placeholder: 'you@example.com', autocomplete: 'email' },
-              { name: 'phone', label: 'Mobile Number', type: 'tel', placeholder: '9876543210', autocomplete: 'tel' },
-              { name: 'password', label: 'Password', type: 'password', placeholder: '••••••••', autocomplete: 'new-password' },
-              { name: 'confirmPassword', label: 'Confirm Password', type: 'password', placeholder: '••••••••', autocomplete: 'new-password' },
-            ].map((field) => (
-              <div key={field.name}>
-                <label htmlFor={field.name} className="block text-sm font-medium text-gray-700 mb-1">
-                  {field.label}
-                </label>
-                <input
-                  {...register(field.name as keyof FormData)}
-                  id={field.name}
-                  type={field.type}
-                  autoComplete={field.autocomplete}
-                  placeholder={field.placeholder}
-                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                />
-                {field.name === 'password' && !errors.password && (
-                  <p className="mt-1 text-xs text-gray-400">
-                    At least 8 characters, with uppercase, lowercase, a number, and a special character.
-                  </p>
-                )}
-                {errors[field.name as keyof FormData] && (
-                  <p className="mt-1 text-xs text-error">
-                    {errors[field.name as keyof FormData]?.message as string}
-                  </p>
-                )}
-              </div>
-            ))}
-
-            <div className="flex items-start gap-2">
-              <input
-                {...register('terms')}
-                type="checkbox"
-                id="terms"
-                className="mt-0.5 w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
-              />
-              <label htmlFor="terms" className="text-sm text-gray-600">
-                I agree to the{' '}
-                <Link href="/policies/terms" className="text-primary hover:underline">Terms of Service</Link>{' '}
-                and{' '}
-                <Link href="/policies/privacy" className="text-primary hover:underline">Privacy Policy</Link>
-              </label>
-            </div>
-            {errors.terms && <p className="text-xs text-error">{errors.terms.message}</p>}
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3 bg-primary text-white font-semibold rounded-xl hover:bg-primary-dark transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {loading ? 'Sending code…' : 'Create Account'}
-            </button>
-          </form>
-
-          <p className="mt-6 text-center text-sm text-gray-500">
-            Already have an account?{' '}
-            <Link href="/login" className="font-medium text-primary hover:underline">
-              Sign in
-            </Link>
-          </p>
         </div>
-      </div>
-    </div>
+
+        <Button type="submit" size="lg" fullWidth loading={loading}>
+          {loading ? 'Sending code…' : 'Create account'}
+        </Button>
+      </form>
+    </AuthCard>
   );
 }

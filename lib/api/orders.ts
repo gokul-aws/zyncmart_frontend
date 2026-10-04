@@ -1,8 +1,7 @@
 import api from './axios';
 import type { ApiResponse, PaginatedResponse } from '@/types/api';
-import type { Order, OrderStatus, PaymentStatus } from '@/types/order';
+import type { Order, OrderStatus, PaymentStatus, OrderQuote } from '@/types/order';
 import type { Address } from '@/types/user';
-import type { CartItem } from '@/types/cart';
 
 export async function fetchUserOrders(): Promise<Order[]> {
   const { data } = await api.get('/orders');
@@ -32,7 +31,9 @@ export interface UpdateAdminOrderStatusPayload {
     trackingNumber?: string;
     url?: string;
   };
-  paymentStatus?: PaymentStatus;
+  notes?: string;
+  // No paymentStatus: payment state changes only through verified payments
+  // and refunds; the server ignores any value sent.
 }
 
 export async function cancelOrder(id: string): Promise<Order> {
@@ -73,10 +74,6 @@ export async function cancelAdminOrder(id: string): Promise<Order> {
   return updateAdminOrderStatus(id, { status: 'cancelled' });
 }
 
-export async function refundAdminOrder(id: string): Promise<Order> {
-  return updateAdminOrderStatus(id, { paymentStatus: 'refunded' });
-}
-
 export async function addAddress(address: Omit<Address, '_id'>): Promise<Address[]> {
   const { data } = await api.post('/users/me/addresses', address);
   return data.data as Address[];
@@ -96,27 +93,11 @@ export async function setDefaultAddress(id: string): Promise<Address[]> {
   return data.data as Address[];
 }
 
+// The server builds the order from the user's cart and calculates every
+// amount itself, so only the delivery address and payment method are sent.
 export interface CreateOrderPayload {
-  items: {
-    product: string;
-    name: string;
-    image: string;
-    price: number;
-    quantity: number;
-    variant?: string;
-  }[];
   shippingAddress: Address;
   paymentMethod: 'razorpay' | 'cod';
-  pricing: {
-    subtotal: number;
-    discount: number;
-    shipping: number;
-    tax: number;
-    total: number;
-  };
-  // Sent for the backend to independently re-validate and apply — the
-  // `pricing.discount` above is display-only, never trusted as-is.
-  couponCode?: string;
 }
 
 export async function createOrder(payload: CreateOrderPayload): Promise<Order> {
@@ -124,20 +105,19 @@ export async function createOrder(payload: CreateOrderPayload): Promise<Order> {
   return data.data as Order;
 }
 
+/** Authoritative checkout amounts for the current cart and delivery state. */
+export async function fetchOrderQuote(destination: { state: string; pincode: string }): Promise<OrderQuote> {
+  const { data } = await api.post('/orders/quote', { shippingAddress: destination });
+  return data.data as OrderQuote;
+}
+
+/** `{ code, message }` from an API error response (backend sends `error` + optional `code`). */
+export function getApiError(err: unknown, fallback: string): { code?: string; message: string } {
+  const data = (err as { response?: { data?: { code?: string; error?: string; message?: string } } })?.response?.data;
+  return { code: data?.code, message: data?.error || data?.message || fallback };
+}
+
 export async function fetchUserAddresses(): Promise<Address[]> {
   const { data } = await api.get('/users/me/addresses');
   return data.data as Address[];
-}
-
-export function cartItemsToOrderItems(
-  items: CartItem[]
-): CreateOrderPayload['items'] {
-  return items.map((i) => ({
-    product: i.productId,
-    name: i.name,
-    image: i.image,
-    price: i.price,
-    quantity: i.quantity,
-    variant: i.variant ?? undefined,
-  }));
 }

@@ -1,56 +1,52 @@
 'use client';
 
-import {
-  useCallback,
-  useEffect,
-  useId,
-  useRef,
-  useState,
-  type KeyboardEvent,
-} from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Search, X, Loader2, ArrowUpRight, TrendingUp } from 'lucide-react';
+import { Search, X, Loader2, ChevronRight } from 'lucide-react';
 import { useProductSearch } from '@/hooks/useProductSearch';
+import { useCategories } from '@/hooks/useCategories';
+import { summarizeProduct } from '@/lib/productDisplay';
+import { formatPrice } from '@/lib/formatters';
+import { cn } from '@/lib/utils';
 import type { Product } from '@/types/product';
-
-const TRENDING = ['Saree', 'Jewellery', 'Toys', 'Home Decor'];
 
 interface Props {
   isOpen: boolean;
+  /** Close after navigating or clicking away. */
   onClose: () => void;
+  /** Close via Escape — the header returns focus to its trigger. */
+  onEscape?: () => void;
 }
 
-export default function HeaderSearchPanel({ isOpen, onClose }: Props) {
+/**
+ * Live product search (ARIA combobox). The header remounts this panel each
+ * time it opens (key), so the query always starts empty.
+ */
+export default function HeaderSearchPanel({ isOpen, onClose, onEscape }: Props) {
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(-1);
-
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const listboxId = useId();
 
   const { data, isFetching, isPending, isReady } = useProductSearch(query);
-  const suggestions: Product[] = data?.data ?? [];
+  const suggestions: Product[] = isReady ? data?.data ?? [] : [];
+  const { data: categories = [] } = useCategories();
+  const browseCategories = categories.filter((c) => c.isActive && !c.parent);
 
   const isLoading = isReady && (isPending || isFetching);
-  const showSuggestions = isOpen && isReady && suggestions.length > 0;
-  const showTrending = isOpen && query.trim().length === 0;
+  const showSuggestions = isOpen && suggestions.length > 0;
+  const showBrowse = isOpen && query.trim().length === 0 && browseCategories.length > 0;
   const showNoResults = isOpen && isReady && !isFetching && !isPending && suggestions.length === 0;
-  const showDropdown = showSuggestions || showTrending || showNoResults;
+  const showDropdown = showSuggestions || showBrowse || showNoResults;
 
-  // Focus input when panel opens; clear state when it closes
   useEffect(() => {
-    if (isOpen) {
-      const t = setTimeout(() => inputRef.current?.focus(), 50);
-      return () => clearTimeout(t);
-    } else {
-      setQuery('');
-      setActiveIndex(-1);
-    }
+    if (!isOpen) return;
+    const t = setTimeout(() => inputRef.current?.focus(), 50);
+    return () => clearTimeout(t);
   }, [isOpen]);
-
-  // Reset active index whenever suggestions list changes
-  useEffect(() => setActiveIndex(-1), [suggestions]);
 
   const navigate = useCallback(
     (product: Product) => {
@@ -60,284 +56,177 @@ export default function HeaderSearchPanel({ isOpen, onClose }: Props) {
     [router, onClose]
   );
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (activeIndex >= 0 && suggestions[activeIndex]) {
-      navigate(suggestions[activeIndex]);
-      return;
-    }
+  const searchAll = () => {
     const q = query.trim();
     if (!q) return;
     router.push(`/search?q=${encodeURIComponent(q)}`);
     onClose();
   };
 
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (activeIndex >= 0 && suggestions[activeIndex]) navigate(suggestions[activeIndex]);
+    else searchAll();
+  };
+
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    switch (e.key) {
-      case 'ArrowDown':
-        e.preventDefault();
-        if (showSuggestions)
-          setActiveIndex((i) => Math.min(i + 1, suggestions.length - 1));
-        break;
-      case 'ArrowUp':
-        e.preventDefault();
-        if (showSuggestions) setActiveIndex((i) => Math.max(i - 1, -1));
-        break;
-      case 'Escape':
-        e.preventDefault();
-        onClose();
-        break;
+    if (e.key === 'ArrowDown' && showSuggestions) {
+      e.preventDefault();
+      setActiveIndex((i) => Math.min(i + 1, suggestions.length - 1));
+    } else if (e.key === 'ArrowUp' && showSuggestions) {
+      e.preventDefault();
+      setActiveIndex((i) => Math.max(i - 1, -1));
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      (onEscape ?? onClose)();
     }
   };
 
-  const primaryImage = (p: Product) =>
-    p.images.find((img) => img.isPrimary)?.url ?? p.images[0]?.url ?? null;
-
   const highlight = (text: string) => {
     const q = query.trim();
-    if (!q) return <>{text}</>;
-    const idx = text.toLowerCase().indexOf(q.toLowerCase());
-    if (idx === -1) return <>{text}</>;
+    const idx = q ? text.toLowerCase().indexOf(q.toLowerCase()) : -1;
+    if (idx === -1) return text;
     return (
       <>
         {text.slice(0, idx)}
-        <mark className="bg-primary/20 text-primary font-semibold not-italic rounded px-0.5">
-          {text.slice(idx, idx + q.length)}
-        </mark>
+        <mark className="rounded-sm bg-primary-subtle font-semibold text-foreground">{text.slice(idx, idx + q.length)}</mark>
         {text.slice(idx + q.length)}
       </>
     );
   };
 
   return (
-    /*
-     * Outer wrapper is `relative` — the dropdown anchors to its bottom edge.
-     * The grid animation wrapper uses overflow-hidden on its *inner* div,
-     * which would clip an absolutely-positioned child. Keeping the dropdown
-     * OUTSIDE that overflow-hidden div fixes the clipping issue entirely.
-     */
     <div className="relative">
-      {/* ── Animated slide-down input bar (grid-rows trick) ─── */}
-      <div
-        className={`grid transition-[grid-template-rows] duration-300 ease-out ${
-          isOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
-        }`}
-        aria-hidden={!isOpen}
-      >
-        <div className="overflow-hidden min-h-0">
-          <div className="border-t border-white/10 bg-secondary/95 backdrop-blur-md px-4 py-3 sm:px-6 lg:px-8">
-            <div className="max-w-3xl mx-auto">
-              <form role="search" onSubmit={handleSubmit}>
-                <div className="relative flex items-center">
-                  <Search
-                    className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/50 pointer-events-none shrink-0"
-                    aria-hidden
-                  />
-                  <input
-                    ref={inputRef}
-                    id="header-search-input"
-                    type="search"
-                    role="combobox"
-                    aria-autocomplete="list"
-                    aria-expanded={showSuggestions}
-                    aria-controls={showSuggestions ? listboxId : undefined}
-                    aria-activedescendant={
-                      activeIndex >= 0
-                        ? `${listboxId}-opt-${activeIndex}`
-                        : undefined
-                    }
-                    autoComplete="off"
-                    autoCorrect="off"
-                    spellCheck="false"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder="Search products, categories, brands…"
-                    className="w-full pl-10 pr-24 py-3 text-sm bg-white/10 text-white placeholder:text-white/50 border border-white/20 rounded-xl focus:outline-none focus:bg-white/15 focus:border-white/40 transition-all"
-                    tabIndex={isOpen ? 0 : -1}
-                  />
-
-                  {/* Loader · Clear · Submit */}
-                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                    {isLoading && (
-                      <Loader2
-                        className="w-4 h-4 text-white/50 animate-spin"
-                        aria-label="Searching…"
-                      />
-                    )}
-                    {query && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setQuery('');
-                          inputRef.current?.focus();
-                        }}
-                        aria-label="Clear search"
-                        className="p-1 text-white/50 hover:text-white transition-colors rounded-full"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    )}
+      {/* Slide-down bar (grid-rows animation). Collapsed = inert, so nothing inside is focusable. */}
+      <div className={cn('grid transition-[grid-template-rows] duration-200 ease-out', isOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')} inert={!isOpen}>
+        <div className="min-h-0 overflow-hidden">
+          <div className="border-t border-white/10 bg-ink px-4 py-3 sm:px-6 lg:px-8">
+            <form role="search" onSubmit={handleSubmit} className="mx-auto max-w-3xl">
+              <div className="relative flex items-center">
+                <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                <input
+                  ref={inputRef}
+                  id="header-search-input"
+                  type="search"
+                  role="combobox"
+                  aria-label="Search products"
+                  aria-autocomplete="list"
+                  aria-expanded={showSuggestions}
+                  aria-controls={showSuggestions ? listboxId : undefined}
+                  aria-activedescendant={activeIndex >= 0 ? `${listboxId}-opt-${activeIndex}` : undefined}
+                  autoComplete="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  value={query}
+                  onChange={(e) => {
+                    setQuery(e.target.value);
+                    setActiveIndex(-1);
+                  }}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Search jewellery, toys, home accessories…"
+                  className="h-11 w-full rounded-lg border-0 bg-surface pl-10 pr-28 text-base text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:text-sm"
+                />
+                <div className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center gap-1">
+                  {isLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-hidden="true" />}
+                  {query && (
                     <button
-                      type="submit"
-                      aria-label="Submit search"
-                      className="px-3 py-1.5 bg-primary hover:bg-primary-dark text-white text-xs font-semibold rounded-lg transition-colors"
+                      type="button"
+                      onClick={() => {
+                        setQuery('');
+                        setActiveIndex(-1);
+                        inputRef.current?.focus();
+                      }}
+                      aria-label="Clear search"
+                      className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground"
                     >
-                      Search
+                      <X className="h-4 w-4" aria-hidden="true" />
                     </button>
-                  </div>
+                  )}
+                  <button type="submit" className="h-8 rounded-md bg-primary px-3 text-sm font-semibold text-white transition-colors hover:bg-primary-hover">
+                    Search
+                  </button>
                 </div>
-              </form>
-            </div>
+              </div>
+              <p className="sr-only" aria-live="polite">
+                {showSuggestions ? `${suggestions.length} suggestion${suggestions.length === 1 ? '' : 's'} available` : showNoResults ? 'No matching products' : ''}
+              </p>
+            </form>
           </div>
         </div>
       </div>
 
-      {/* ── Dropdown (sibling of the animated bar, NOT inside overflow-hidden) ── */}
+      {/* Dropdown sits outside the overflow-hidden bar so it isn't clipped. */}
       {showDropdown && (
-        <div className="absolute left-0 right-0 top-full z-50 px-4 sm:px-6 lg:px-8 pt-1.5">
-          <div className="max-w-3xl mx-auto">
-            <div className="rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-black/20 overflow-hidden">
+        <div className="absolute inset-x-0 top-full z-50 px-4 pt-2 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-3xl overflow-hidden rounded-xl border border-border bg-surface shadow-lg">
+            {showBrowse && (
+              <div className="p-4">
+                <p className="mb-2 text-sm font-semibold text-foreground">Browse categories</p>
+                <ul className="flex flex-wrap gap-2">
+                  {browseCategories.map((cat) => (
+                    <li key={cat._id}>
+                      <Link href={`/categories/${cat.slug}`} onClick={onClose} className="inline-flex h-9 items-center rounded-full bg-surface-muted px-3 text-sm text-foreground hover:bg-primary-subtle hover:text-primary">
+                        {cat.name}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
-              {/* Trending chips (empty query) */}
-              {/* {showTrending && (
-                <div className="p-4">
-                  <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">
-                    <TrendingUp className="w-3.5 h-3.5" />
-                    Trending searches
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {TRENDING.map((term) => (
-                      <button
-                        key={term}
-                        type="button"
-                        onClick={() => {
-                          setQuery(term);
-                          inputRef.current?.focus();
-                        }}
-                        className="px-3 py-1.5 text-sm text-slate-700 bg-slate-100 hover:bg-primary/10 hover:text-primary rounded-full transition-colors"
+            {showSuggestions && (
+              <>
+                <ul id={listboxId} role="listbox" aria-label="Product suggestions" className="max-h-[60vh] overflow-y-auto py-1.5">
+                  {suggestions.map((product, i) => {
+                    const summary = summarizeProduct(product);
+                    const isActive = i === activeIndex;
+                    return (
+                      <li
+                        key={product._id}
+                        id={`${listboxId}-opt-${i}`}
+                        role="option"
+                        aria-selected={isActive}
+                        // Keep focus in the input (combobox pattern).
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => navigate(product)}
+                        onMouseEnter={() => setActiveIndex(i)}
+                        className={cn('flex cursor-pointer items-center gap-3 px-4 py-2.5', isActive && 'bg-surface-muted')}
                       >
-                        {term}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )} */}
-
-              {/* Product suggestions */}
-              {showSuggestions && (
-                <>
-                  <ul
-                    id={listboxId}
-                    role="listbox"
-                    aria-label="Search suggestions"
-                    className="py-2"
+                        <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-surface-muted">
+                          {summary.image && <Image src={summary.image} alt="" fill sizes="48px" className="object-cover" />}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-foreground">{highlight(product.name)}</p>
+                          <p className="text-sm text-muted-foreground">{product.category?.name}</p>
+                        </div>
+                        <p className="shrink-0 text-sm font-semibold tabular-nums text-foreground">
+                          {summary.hasPriceRange && <span className="font-normal text-muted-foreground">From </span>}
+                          {formatPrice(summary.price)}
+                        </p>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <div className="border-t border-border">
+                  <button
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={searchAll}
+                    className="flex h-11 w-full items-center justify-center gap-1 text-sm font-semibold text-primary hover:bg-surface-muted"
                   >
-                    {suggestions.map((product, i) => {
-                      const thumb = primaryImage(product);
-                      const isActive = i === activeIndex;
-                      return (
-                        <li
-                          key={product._id}
-                          id={`${listboxId}-opt-${i}`}
-                          role="option"
-                          aria-selected={isActive}
-                        >
-                          <button
-                            type="button"
-                            onClick={() => navigate(product)}
-                            onMouseEnter={() => setActiveIndex(i)}
-                            onMouseLeave={() => setActiveIndex(-1)}
-                            className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
-                              isActive ? 'bg-primary/10' : 'hover:bg-slate-50'
-                            }`}
-                          >
-                            {/* Thumbnail */}
-                            <div className="shrink-0 w-12 h-12 rounded-xl overflow-hidden bg-slate-100 border border-slate-200">
-                              {thumb ? (
-                                <Image
-                                  src={thumb}
-                                  alt={product.name}
-                                  width={48}
-                                  height={48}
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center">
-                                  <Search className="w-4 h-4 text-slate-300" />
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Name + category */}
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-slate-900 truncate">
-                                {highlight(product.name)}
-                              </p>
-                              <p className="text-xs text-slate-500 mt-0.5">
-                                {product.category.name}
-                              </p>
-                            </div>
-
-                            {/* Price */}
-                            <div className="shrink-0 text-right">
-                              {product.price != null && (
-                                <p className="text-sm font-semibold text-slate-900">
-                                  ₹{product.price.toLocaleString('en-IN')}
-                                </p>
-                              )}
-                              {product.comparePrice &&
-                                product.price != null &&
-                                product.comparePrice > product.price && (
-                                  <p className="text-xs text-slate-400 line-through">
-                                    ₹{product.comparePrice.toLocaleString('en-IN')}
-                                  </p>
-                                )}
-                            </div>
-
-                            <ArrowUpRight
-                              className={`shrink-0 w-4 h-4 transition-colors ${
-                                isActive ? 'text-primary' : 'text-slate-300'
-                              }`}
-                              aria-hidden
-                            />
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-
-                  {/* View all results footer */}
-                  <div className="border-t border-slate-100 px-4 py-2.5">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const q = query.trim();
-                        if (!q) return;
-                        router.push(`/search?q=${encodeURIComponent(q)}`);
-                        onClose();
-                      }}
-                      className="w-full flex items-center justify-center gap-2 text-sm text-primary font-semibold hover:underline py-1 transition-colors"
-                    >
-                      <Search className="w-3.5 h-3.5" />
-                      View all results for &ldquo;{query.trim()}&rdquo;
-                    </button>
-                  </div>
-                </>
-              )}
-
-              {/* No results */}
-              {showNoResults && (
-                <div className="px-4 py-8 text-center">
-                  <p className="text-sm font-medium text-slate-700">
-                    No results for &ldquo;{query.trim()}&rdquo;
-                  </p>
-                  <p className="text-xs text-slate-400 mt-1">
-                    Try a different keyword or browse all products.
-                  </p>
+                    View all results for &ldquo;{query.trim()}&rdquo;
+                    <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                  </button>
                 </div>
-              )}
-            </div>
+              </>
+            )}
+
+            {showNoResults && (
+              <div className="px-4 py-8 text-center">
+                <p className="text-sm font-medium text-foreground">No results for &ldquo;{query.trim()}&rdquo;</p>
+                <p className="mt-1 text-sm text-muted-foreground">Try a different word, or browse all products.</p>
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import SearchBar from '@/components/layout/SearchBar';
+import SortDropdown from '@/components/filters/SortDropdown';
 import ProductGrid from '@/components/product/ProductGrid';
 import { ProductGridSkeleton } from '@/components/product/ProductSkeleton';
 
@@ -22,23 +23,25 @@ export default async function SearchPage({ searchParams }: { searchParams: Searc
   const { q } = await searchParams;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-      {/* Search input */}
-      <div className="mb-6 max-w-xl">
-        <SearchBar autoFocus defaultValue={q} />
+    <div className="mx-auto max-w-7xl px-4 pb-16 pt-6 sm:px-6 lg:px-8">
+      <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">{q ? <>Results for &ldquo;{q}&rdquo;</> : 'Search'}</h1>
+      <div className="mt-4 mb-8 max-w-xl">
+        <SearchBar autoFocus={!q} defaultValue={q} />
       </div>
 
       {q ? (
         <>
-          <h1 className="text-xl font-bold text-gray-900 mb-5">
-            Results for &ldquo;{q}&rdquo;
-          </h1>
+          <div className="mb-5 flex justify-end">
+            <Suspense fallback={null}>
+              <SortDropdown />
+            </Suspense>
+          </div>
           <Suspense fallback={<ProductGridSkeleton count={12} />}>
             <ProductGrid defaultSearch={q} />
           </Suspense>
         </>
       ) : (
-        <p className="text-gray-500 text-sm">Enter a search term above to find products.</p>
+        <p className="text-sm text-muted-foreground">Search for jewellery, toys and home accessories.</p>
       )}
     </div>
   );

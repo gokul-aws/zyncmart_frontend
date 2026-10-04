@@ -1,55 +1,48 @@
 'use client';
 
-import type { ColorOption } from '@/hooks/useProduct';
+import { cn } from '@/lib/utils';
+import type { ColorVariant } from '@/types/product';
 
 interface ProductColorSelectorProps {
-  colors: ColorOption[];
-  selected: string | null;
-  onChange: (colorName: string) => void;
+  colorVariants: ColorVariant[];
+  selected: ColorVariant | null;
+  onChange: (variant: ColorVariant) => void;
 }
 
-export default function ProductColorSelector({
-  colors,
-  selected,
-  onChange,
-}: ProductColorSelectorProps) {
-  if (!colors?.length) return null;
+export default function ProductColorSelector({ colorVariants, selected, onChange }: ProductColorSelectorProps) {
+  if (!colorVariants?.length) return null;
 
   return (
-    <div>
-      <p className="text-sm font-medium text-gray-700 mb-2">
-        Color: <span className="font-semibold text-gray-900">{selected}</span>
-      </p>
+    <fieldset>
+      <legend className="mb-2.5 text-sm font-medium text-foreground">
+        Colour: <span className="font-semibold">{selected?.color ?? 'Select'}</span>
+      </legend>
       <div className="flex flex-wrap gap-2">
-        {colors.map((color) => {
-          const isSelected = selected === color.name;
-          const isOutOfStock = color.stock === 0;
+        {colorVariants.map((variant) => {
+          const isSelected = selected?._id === variant._id || (!!selected && selected.color === variant.color);
+          const isOutOfStock = variant.stock === 0;
 
           return (
             <button
-              key={color.name}
+              key={variant._id ?? variant.color}
               type="button"
-              onClick={() => onChange(color.name)}
-              aria-label={color.name}
+              onClick={() => onChange(variant)}
               aria-pressed={isSelected}
-              className={`flex items-center gap-2 rounded-md border px-3.5 py-1.5 text-sm font-medium transition-colors ${
-                isSelected
-                  ? 'border-primary bg-primary text-white'
-                  : 'border-gray-300 bg-white text-gray-700 hover:border-gray-500'
-              } ${isOutOfStock && !isSelected ? 'text-gray-400' : ''}`}
-            >
-              {color.code && (
-                <span
-                  className="h-3.5 w-3.5 rounded-full border border-black/10 shrink-0"
-                  style={{ backgroundColor: color.code }}
-                />
+              aria-label={`${variant.color}${isOutOfStock ? ', out of stock' : ''}`}
+              className={cn(
+                'inline-flex h-11 items-center gap-2 rounded-lg border bg-surface px-3.5 text-sm font-medium transition-colors',
+                isSelected ? 'border-ink ring-1 ring-ink' : 'border-border-strong hover:border-subtle-foreground',
+                isOutOfStock && 'text-muted-foreground'
               )}
-              {color.name}
-              {isOutOfStock && <span className="text-xs">(Out of stock)</span>}
+            >
+              {variant.colorCode && (
+                <span className="h-5 w-5 shrink-0 rounded-full border border-black/15" style={{ backgroundColor: variant.colorCode }} aria-hidden="true" />
+              )}
+              <span className={cn(isOutOfStock && 'line-through')}>{variant.color}</span>
             </button>
           );
         })}
       </div>
-    </div>
+    </fieldset>
   );
 }

@@ -1,3 +1,5 @@
+import type { CheckoutIssue } from './order';
+
 export interface CartItemAttributes {
   color?: string | null;
   colorCode?: string | null;
@@ -18,7 +20,7 @@ export interface CartItem {
   totalPrice: number;
   attributes: CartItemAttributes;
   variant: string | null;
-  stock: number;
+  stock: { sku: string; stock: number } | null;
 }
 
 export interface CartSummary {
@@ -30,13 +32,14 @@ export interface CartSummary {
   tax: number;
   grandTotal: number;
   coupon: string | null;
+  /** True until a delivery address is known; checkout shows the exact quote. */
+  shippingEstimated?: boolean;
+  freeShippingThreshold?: number;
 }
 
 export interface CartResponse {
   items: CartItem[];
   summary: CartSummary;
-  // Human-readable notices for anything the backend changed while
-  // re-syncing the cart against live product data (item removed, price
-  // changed, quantity reduced for insufficient stock).
-  notices?: string[];
+  /** Lines removed / quantities reduced / coupon dropped by the server. */
+  notices?: CheckoutIssue[];
 }

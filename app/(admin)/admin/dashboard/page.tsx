@@ -6,22 +6,26 @@ import AdminPageShell from '@/components/admin/AdminPageShell';
 import AdminRevenueChart from '@/components/admin/AdminRevenueChart';
 import AdminRecentOrdersTable from '@/components/admin/AdminRecentOrdersTable';
 import AdminTopSellingProducts from '@/components/admin/AdminTopSellingProducts';
-import Badge from '@/components/ui/Badge';
+import Link from 'next/link';
+import { Clock, IndianRupee, Package, ShoppingBag, Users, type LucideIcon } from 'lucide-react';
+import Alert from '@/components/ui/Alert';
+import Button from '@/components/ui/Button';
+import Skeleton from '@/components/ui/Skeleton';
+import { CardHeader } from '@/components/ui/Card';
+import { formatPrice } from '@/lib/formatters';
 
-const metricCards = [
-  { key: 'totalOrders', label: 'Total orders', prefix: '', suffix: '', color: 'bg-sky-100 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300' },
-  { key: 'totalRevenue', label: 'Total revenue', prefix: '₹', suffix: '', color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300' },
-  { key: 'totalCustomers', label: 'Total customers', prefix: '', suffix: '', color: 'bg-violet-100 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300' },
-  { key: 'totalProducts', label: 'Total products', prefix: '', suffix: '', color: 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300' },
-  { key: 'pendingOrders', label: 'Pending orders', prefix: '', suffix: '', color: 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300' },
+const METRICS: { key: string; label: string; icon: LucideIcon; money?: boolean; href?: string }[] = [
+  { key: 'totalRevenue', label: 'Total revenue', icon: IndianRupee, money: true },
+  { key: 'totalOrders', label: 'Total orders', icon: ShoppingBag, href: '/admin/orders' },
+  { key: 'pendingOrders', label: 'Pending orders', icon: Clock, href: '/admin/orders?status=placed' },
+  { key: 'totalCustomers', label: 'Customers', icon: Users, href: '/admin/customers' },
+  { key: 'totalProducts', label: 'Products', icon: Package, href: '/admin/products' },
 ];
 
-function renderMetricValue(key: string, stats: any) {
+function metricValue(stats: Record<string, number> | undefined, key: string, money?: boolean) {
   const value = stats?.[key];
-  if (key === 'totalRevenue') {
-    return value != null ? `₹${value.toLocaleString()}` : '—';
-  }
-  return value != null ? value.toLocaleString() : '—';
+  if (value == null) return '—';
+  return money ? formatPrice(value) : value.toLocaleString('en-IN');
 }
 
 export default function DashboardPage() {
@@ -45,75 +49,92 @@ export default function DashboardPage() {
     })) ?? [];
   }, [data]);
 
+  const pipelineTotal = statusSummary.reduce((sum, s) => sum + s.value, 0);
+
   return (
-    <AdminPageShell
-      title="Dashboard"
-      description="Monitor orders, customers, and product performance from one central place."
-    >
+    <AdminPageShell title="Dashboard" description="Orders, customers and products at a glance.">
       {isError && (
-        <div className="rounded-3xl border border-rose-200 bg-rose-50 p-6 text-rose-700 dark:border-rose-500/40 dark:bg-rose-950/20 dark:text-rose-200">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="font-semibold">Unable to load dashboard data.</p>
-              <p className="text-sm text-rose-600 dark:text-rose-300">Please try again or check your network connection.</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => refetch()}
-              className="rounded-2xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-500 transition-colors"
-            >
+        <Alert
+          variant="error"
+          title="Dashboard data could not be loaded"
+          action={
+            <Button variant="outline" size="sm" onClick={() => refetch()}>
               Retry
-            </button>
-          </div>
-        </div>
+            </Button>
+          }
+        >
+          Please check your connection and try again.
+        </Alert>
       )}
 
-      <div className="grid gap-4 xl:grid-cols-[repeat(3,1fr)] xl:grid-rows-[auto_minmax(0,1fr)]">
-        {metricCards.map((card) => (
-          <div
-            key={card.key}
-            className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900"
-          >
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">{card.label}</p>
-                <p className="mt-3 text-3xl font-semibold text-slate-900 dark:text-white">
-                  {isLoading ? 'Loading…' : renderMetricValue(card.key, data?.stats)}
-                </p>
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
+        {METRICS.map((m) => {
+          const Icon = m.icon;
+          const body = (
+            <>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm text-muted-foreground">{m.label}</p>
+                <Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
               </div>
-              <div className={`rounded-3xl px-3 py-2 text-xs font-semibold ${card.color}`}>
-                {card.label === 'Pending orders' ? 'Action' : 'Summary'}
-              </div>
+              {isLoading ? (
+                <Skeleton className="mt-3 h-8 w-24" />
+              ) : (
+                <p className="mt-2 text-2xl font-bold tabular-nums text-foreground">{metricValue(data?.stats, m.key, m.money)}</p>
+              )}
+            </>
+          );
+          return m.href ? (
+            <Link key={m.key} href={m.href} className="rounded-xl border border-border bg-surface p-5 transition-colors hover:border-border-strong">
+              {body}
+            </Link>
+          ) : (
+            <div key={m.key} className="rounded-xl border border-border bg-surface p-5">
+              {body}
             </div>
-          </div>
-        ))}
-
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900 xl:col-span-2">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm font-semibold text-slate-900 dark:text-white">Order status</p>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">A quick look at the current order pipeline.</p>
-            </div>
-          </div>
-          <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-            {statusSummary.map((item) => (
-              <div key={item.label} className="rounded-3xl bg-slate-50 p-4 dark:bg-slate-950">
-                <p className="text-xs uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">{item.label}</p>
-                <p className="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">{isLoading ? '—' : item.value}</p>
-              </div>
-            ))}
-          </div>
-        </div>
+          );
+        })}
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[2fr_1fr]">
+      <section className="rounded-xl border border-border bg-surface p-5">
+        <CardHeader title="Order pipeline" description="Orders by current status" />
+        {isLoading ? (
+          <Skeleton className="h-3 w-full rounded-full" />
+        ) : (
+          <>
+            <div className="flex h-3 overflow-hidden rounded-full bg-surface-muted" aria-hidden="true">
+              {pipelineTotal > 0 &&
+                statusSummary.map((s) => (
+                  <span key={s.label} className={PIPELINE_COLORS[s.label]} style={{ width: `${(s.value / pipelineTotal) * 100}%` }} />
+                ))}
+            </div>
+            <ul className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+              {statusSummary.map((s) => (
+                <li key={s.label} className="flex items-center gap-2 text-sm">
+                  <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${PIPELINE_COLORS[s.label]}`} aria-hidden="true" />
+                  <span className="text-muted-foreground">{s.label}</span>
+                  <span className="ml-auto font-semibold tabular-nums text-foreground">{s.value}</span>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </section>
+
+      <div className="grid gap-6 [&>*]:min-w-0 xl:grid-cols-[2fr_1fr]">
         <div className="space-y-6">
           <AdminRevenueChart data={revenueChartData} />
           <AdminRecentOrdersTable recentOrders={data?.recentOrders ?? []} />
         </div>
-
         <AdminTopSellingProducts products={data?.topSellingProducts ?? []} />
       </div>
     </AdminPageShell>
   );
 }
+
+const PIPELINE_COLORS: Record<string, string> = {
+  Placed: 'bg-amber-500',
+  Processing: 'bg-sky-500',
+  Shipped: 'bg-primary',
+  Delivered: 'bg-success',
+  Cancelled: 'bg-gray-400',
+};

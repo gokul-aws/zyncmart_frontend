@@ -1,110 +1,80 @@
 'use client';
 
 import Image from 'next/image';
-import { useSearchParams } from 'next/navigation';
 import { useCartStore } from '@/lib/store/cartStore';
-import { useBuyNowStore } from '@/lib/store/buyNowStore';
 import { formatPrice } from '@/lib/formatters';
+import { cn } from '@/lib/utils';
+import type { OrderQuote } from '@/types/order';
 
 interface OrderSummaryProps {
-  shippingCharge?: number;
+  /** Card frame + heading (desktop sidebar); off inside the mobile disclosure. */
+  framed?: boolean;
+  /** Server-calculated amounts; null until a delivery state/pincode is known. */
+  quote: OrderQuote | null;
+  quoteLoading?: boolean;
+  quoteError?: string | null;
   detectedState?: string;
 }
 
-export default function OrderSummary({ shippingCharge, detectedState }: OrderSummaryProps) {
-  const searchParams = useSearchParams();
-  const isBuyNow = searchParams.get('buyNow') === 'true';
+export default function OrderSummary({ quote, quoteLoading, quoteError, detectedState, framed = true }: OrderSummaryProps) {
+  const items = useCartStore((s) => s.items);
+  const cartSummary = useCartStore((s) => s.summary);
 
-  const cartItems = useCartStore((s) => s.items);
-  const cartGetSummary = useCartStore((s) => s.getSummary);
-  const buyNowItems = useBuyNowStore((s) => s.items);
-  const buyNowGetSummary = useBuyNowStore((s) => s.getSummary);
-
-  const items = isBuyNow ? buyNowItems : cartItems;
-  const getSummary = isBuyNow ? buyNowGetSummary : cartGetSummary;
-  const { subtotal, discount } = getSummary();
-
-  const shipping = shippingCharge ?? 0;
-  const total = subtotal - discount + shipping;
+  // Before an address is entered, show the cart's own server-priced subtotal;
+  // shipping and the payable total only ever come from the quote.
+  const subtotal = quote?.subtotal ?? cartSummary.subtotal;
+  const discount = quote?.discount ?? cartSummary.discount;
+  const couponCode = quote?.coupon?.code ?? cartSummary.coupon;
 
   return (
-    <div className="bg-gray-50 rounded-xl p-6 space-y-4">
-      <h2 className="font-semibold text-gray-900 text-lg">Order Summary</h2>
+    <div className={cn('space-y-4', framed && 'rounded-xl border border-border bg-surface p-5')}>
+      {framed && <h2 className="text-base font-semibold text-foreground">Order summary</h2>}
 
-      <ul className="divide-y divide-gray-200">
+      <ul className="divide-y divide-border">
         {items.map((item) => (
-          <li
-            key={item._id}
-            className="py-3 flex gap-3 items-start"
-          >
-            <div className="relative w-14 h-14 shrink-0 rounded-lg overflow-hidden bg-gray-100">
-              {item.image ? (
-                <Image
-                  src={item.image}
-                  alt={item.name}
-                  fill
-                  sizes="56px"
-                  className="object-cover"
-                />
-              ) : (
-                <div className="w-full h-full bg-gray-200" />
-              )}
+          <li key={item._id} className="flex items-start gap-3 py-3">
+            <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-surface-muted">
+              {item.image && <Image src={item.image} alt="" fill sizes="56px" className="object-cover" />}
+              <span className="absolute -right-0 -top-0 flex h-5 min-w-5 items-center justify-center rounded-bl-md bg-ink px-1 text-xs font-semibold text-white" aria-hidden="true">
+                {item.quantity}
+              </span>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 line-clamp-2">{item.name}</p>
-              {item.attributes?.color && (
-                <p className="flex items-center gap-1.5 text-xs text-gray-500 mt-0.5">
-                  {item.attributes.colorCode && (
-                    <span
-                      className="h-3 w-3 rounded-full border border-black/10 shrink-0"
-                      style={{ backgroundColor: item.attributes.colorCode }}
-                    />
-                  )}
-                  {item.attributes.color}
-                </p>
+            <div className="min-w-0 flex-1">
+              <p className="line-clamp-2 text-sm font-medium text-foreground">{item.name}</p>
+              {(item.attributes?.color || item.attributes?.size) && (
+                <p className="mt-0.5 text-sm text-muted-foreground">{[item.attributes?.color, item.attributes?.size].filter(Boolean).join(' · ')}</p>
               )}
-              {item.attributes?.size && (
-                <p className="text-xs text-gray-500 mt-0.5">{item.attributes.size}</p>
-              )}
-              <p className="text-xs text-gray-500 mt-0.5">Qty: {item.quantity}</p>
+              <p className="sr-only">Quantity {item.quantity}</p>
             </div>
-            <p className="text-sm font-semibold text-gray-900 shrink-0">
-              {formatPrice(item.totalPrice)}
-            </p>
+            <p className="shrink-0 text-sm font-semibold tabular-nums text-foreground">{formatPrice(item.totalPrice)}</p>
           </li>
         ))}
       </ul>
 
-      <div className="border-t border-gray-200 pt-4 space-y-2 text-sm">
-        <div className="flex justify-between text-gray-600">
-          <span>Subtotal</span>
-          <span>{formatPrice(subtotal)}</span>
+      <dl className="space-y-2 border-t border-border pt-4 text-sm tabular-nums">
+        <div className="flex justify-between text-muted-foreground">
+          <dt>Subtotal</dt>
+          <dd className="text-foreground">{formatPrice(subtotal)}</dd>
         </div>
         {discount > 0 && (
-          <div className="flex justify-between text-green-600">
-            <span>Discount</span>
-            <span>-{formatPrice(discount)}</span>
+          <div className="flex justify-between text-success">
+            <dt>Discount{couponCode ? ` (${couponCode})` : ''}</dt>
+            <dd>−{formatPrice(discount)}</dd>
           </div>
         )}
-        {shippingCharge !== undefined && (
-          <>
-            <div className="flex justify-between text-gray-600">
-              <span>Shipping</span>
-              <span>{formatPrice(shipping)}</span>
-            </div>
-            {detectedState && (
-              <div className="flex justify-between text-gray-500 text-xs">
-                <span>Detected State</span>
-                <span>{detectedState}</span>
-              </div>
-            )}
-          </>
-        )}
-        <div className="flex justify-between font-bold text-gray-900 text-base pt-2 border-t border-gray-200">
-          <span>Grand Total</span>
-          <span>{formatPrice(total)}</span>
+        <div className="flex justify-between text-muted-foreground">
+          <dt>Shipping{detectedState ? ` to ${detectedState}` : ''}</dt>
+          <dd className="text-foreground">
+            {quote ? (quote.shipping === 0 ? 'Free' : formatPrice(quote.shipping)) : quoteLoading ? 'Calculating…' : 'Calculated after address'}
+          </dd>
         </div>
+      </dl>
+      {quoteError && <p className="text-sm font-medium text-error">{quoteError}</p>}
+      <div className="flex justify-between border-t border-border pt-4 text-base font-bold text-foreground tabular-nums">
+        <span>Total</span>
+        <span>{quote ? formatPrice(quote.total) : '—'}</span>
       </div>
+      <p className="text-sm text-muted-foreground">Prices include GST.</p>
     </div>
   );
 }

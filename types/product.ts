@@ -22,9 +22,6 @@ export interface BackendProductVariant {
   price: number;
   originalPrice?: number;
   stock: number;
-  // Each variant can carry multiple images (e.g. front/back).
-  images?: ProductImage[];
-  /** @deprecated legacy single-image field — normalized into `images` by the backend on read */
   image?: string;
 }
 
@@ -33,6 +30,8 @@ export interface ColorVariant {
   _id?: string;
   color: string;
   colorCode?: string;
+  /** Present when the entry is one exact colour + size variant. */
+  size?: string;
   images: ProductImage[];
   stock: number;
   sku: string;
@@ -104,13 +103,7 @@ export interface Product {
   isActive: boolean;
   metaTitle?: string;
   metaDescription?: string;
-  ratings: {
-    average: number;
-    count: number;
-    // Per-star breakdown computed from ALL reviews (not just the current
-    // page) — may be absent on data older than this field.
-    distribution?: Record<'1' | '2' | '3' | '4' | '5', number>;
-  };
+  ratings: { average: number; count: number };
   createdAt: string;
 }
 

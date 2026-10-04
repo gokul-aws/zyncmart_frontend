@@ -7,7 +7,6 @@ import { toast } from 'sonner';
 import AdminPageShell from '@/components/admin/AdminPageShell';
 import AdminProductForm from '@/components/admin/products/AdminProductForm';
 import { createProduct, uploadProductImages, uploadVariantImages } from '@/lib/api/products';
-import { invalidateStorefrontQueries } from '@/hooks/useAdminProducts';
 import type { ProductCreatePayload } from '@/types/product';
 
 export default function AdminProductCreatePage() {
@@ -41,18 +40,18 @@ export default function AdminProductCreatePage() {
           if (!variant?._id) continue;
           await uploadVariantImages(product._id, variant._id, files);
         }
+      } else if (variantImageFiles.length > 0) {
+        // Legacy / edit-mode path (colorVariants): sequential upload
+        const colorVariants = product.colorVariants ?? [];
+        for (let index = 0; index < colorVariants.length; index++) {
+          const files = variantImageFiles[index];
+          if (!files?.length) continue;
+          const variant = colorVariants[index];
+          await uploadVariantImages(product._id, variant._id as string, files);
+        }
       }
 
-      // Bust both the admin listing's React Query cache AND every storefront
-      // cache layer (React Query + the Next.js Data Cache tag behind
-      // homepage/listing/PDP fetches) — this create flow calls the raw API
-      // functions directly rather than the useCreateAdminProduct() mutation,
-      // so it must replicate that hook's onSuccess invalidation itself, done
-      // here (after images finish uploading) rather than right after the
-      // bare product create, so the newly-visible product already has its
-      // images.
       queryClient.invalidateQueries({ queryKey: ['admin', 'products'] });
-      invalidateStorefrontQueries(queryClient, product.slug);
       toast.success('Product created successfully.');
       router.push(`/admin/products/${product.slug}`);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

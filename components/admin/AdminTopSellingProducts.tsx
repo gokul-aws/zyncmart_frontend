@@ -1,45 +1,32 @@
 'use client';
 
 import type { TopSellingProduct } from '@/types/dashboard';
-import Badge from '@/components/ui/Badge';
+import { CardHeader } from '@/components/ui/Card';
+import { formatPrice } from '@/lib/formatters';
 
-interface AdminTopSellingProductsProps {
-  products: TopSellingProduct[];
-}
-
-export default function AdminTopSellingProducts({ products }: AdminTopSellingProductsProps) {
+export default function AdminTopSellingProducts({ products }: { products: TopSellingProduct[] }) {
   return (
-    <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold text-slate-900 dark:text-white">Top selling products</p>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Products generating the most orders.</p>
-        </div>
-        <Badge variant="success" className="uppercase tracking-[0.2em]">Top 10</Badge>
-      </div>
-
-      <div className="mt-6 space-y-3">
-        {products.length === 0 ? (
-          <p className="text-sm text-slate-500 dark:text-slate-400">No top selling products available yet.</p>
-        ) : (
-          <div className="space-y-3">
-            {products.map((product, index) => (
-              <div key={product._id} className="rounded-3xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="font-semibold text-slate-900 dark:text-white truncate">{index + 1}. {product.name}</p>
-                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">SKU: {product.sku}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-semibold text-slate-900 dark:text-white">{product.unitsSold} sold</p>
-                    <p className="text-sm text-slate-500 dark:text-slate-400">₹{product.revenue.toLocaleString()}</p>
-                  </div>
-                </div>
+    <section className="rounded-xl border border-border bg-surface p-5">
+      <CardHeader title="Top selling products" description="By units sold" />
+      {products.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No sales yet.</p>
+      ) : (
+        <ol className="divide-y divide-border">
+          {products.map((product, index) => (
+            <li key={product._id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
+              <span className="w-5 shrink-0 text-sm font-semibold tabular-nums text-muted-foreground">{index + 1}</span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-foreground">{product.name}</p>
+                <p className="text-sm text-muted-foreground">{product.sku}</p>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+              <div className="text-right tabular-nums">
+                <p className="text-sm font-semibold text-foreground">{product.unitsSold} sold</p>
+                <p className="text-sm text-muted-foreground">{formatPrice(product.revenue)}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
     </section>
   );
 }

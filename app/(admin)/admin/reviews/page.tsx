@@ -14,7 +14,7 @@ export default function AdminReviewsPage() {
         title="Reviews management coming soon"
         description="The reviews admin console is not implemented yet. Check back after the next release."
         action={{ label: 'Refresh dashboard', href: '/admin/dashboard' }}
-        icon={<MessageSquare className="h-12 w-12 text-slate-400" />}
+        icon={<MessageSquare className="h-12 w-12 text-subtle-foreground" />}
       />
     </AdminPageShell>
   );

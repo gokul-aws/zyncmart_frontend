@@ -6,6 +6,9 @@ export interface CreatePaymentOrderResponse {
   currency: string;
   orderNumber?: string;
   keyId?: string;
+  /** End of the order's payment window (null for orders without one). */
+  expiresAt?: string | null;
+  remainingSeconds?: number | null;
 }
 
 export interface VerifyPaymentPayload {
@@ -22,6 +25,8 @@ export async function createPaymentOrder(
   return data.data as CreatePaymentOrderResponse;
 }
 
-export async function verifyPayment(payload: VerifyPaymentPayload): Promise<void> {
-  await api.post('/payments/verify', payload);
+/** Resolves with the server's outcome; `code` is 'PAYMENT_PENDING' when capture is still being confirmed. */
+export async function verifyPayment(payload: VerifyPaymentPayload): Promise<{ code?: string }> {
+  const { data } = await api.post('/payments/verify', payload);
+  return { code: data?.code };
 }

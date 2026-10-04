@@ -1,58 +1,46 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Heart } from 'lucide-react';
 import { useWishlist } from '@/hooks/useWishlist';
+import { fetchProducts } from '@/lib/api/products';
 import ProductCard from '@/components/product/ProductCard';
 import EmptyState from '@/components/ui/EmptyState';
+import { ProductGridSkeleton } from '@/components/product/ProductSkeleton';
 
 export default function WishlistClient() {
-  // The wishlist store is the source of truth (backed by GET /wishlist,
-  // fully populated) — no separate product fetch needed, and unlike the
-  // previous implementation this can't silently drop items that aren't
-  // among the 50 most-recently-created products in the whole catalog.
-  const { products: entries, loadWishlist } = useWishlist();
-  const [isLoading, setIsLoading] = useState(true);
+  const { items } = useWishlist();
 
-  useEffect(() => {
-    loadWishlist().finally(() => setIsLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const { data, isLoading } = useQuery({
+    queryKey: ['wishlist-products', items],
+    queryFn: () =>
+      items.length === 0
+        ? Promise.resolve({ data: [], pagination: { page: 1, limit: 0, total: 0, pages: 0 }, success: true })
+        : fetchProducts({ limit: 50 }),
+    enabled: items.length > 0,
+    staleTime: 60_000,
+  });
 
-  const products = entries.map((e) => e.product);
-
-  if (isLoading) {
-    return (
-      <div>
-        <h1 className="text-xl font-bold text-gray-900 mb-5">My Wishlist</h1>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-64 bg-gray-100 rounded-xl animate-pulse" />
-          ))}
-        </div>
-      </div>
-    );
-  }
+  const products = (data?.data ?? []).filter((p) => items.includes(p._id));
 
   return (
     <div className="space-y-5">
-      <h1 className="text-xl font-bold text-gray-900">
-        My Wishlist {products.length > 0 && `(${products.length})`}
+      <h1 className="text-2xl font-bold tracking-tight text-foreground">
+        My wishlist {items.length > 0 && <span className="text-lg font-medium text-muted-foreground">({items.length})</span>}
       </h1>
 
-      {products.length === 0 ? (
-        <EmptyState
-          title="Your wishlist is empty"
-          description="Save items you love by tapping the heart icon."
-          action={{ label: 'Explore Products', href: '/products' }}
-          icon={<Heart className="w-14 h-14" />}
-        />
+      {items.length === 0 ? (
+        <EmptyState compact title="Your wishlist is empty" description="Tap the heart on any product to save it here." action={{ label: 'Explore products', href: '/products' }} icon={<Heart />} />
+      ) : isLoading ? (
+        <ProductGridSkeleton count={3} />
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+        <ul className="grid grid-cols-2 gap-x-3 gap-y-8 sm:grid-cols-3 sm:gap-x-5">
           {products.map((product) => (
-            <ProductCard key={product._id} product={product} />
+            <li key={product._id}>
+              <ProductCard product={product} />
+            </li>
           ))}
-        </div>
+        </ul>
       )}
     </div>
   );

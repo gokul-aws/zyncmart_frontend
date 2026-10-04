@@ -1,60 +1,69 @@
 'use client';
 
+import Link from 'next/link';
 import type { RecentOrder } from '@/types/dashboard';
 import Badge from '@/components/ui/Badge';
+import { CardHeader } from '@/components/ui/Card';
+import { formatPrice, formatDate } from '@/lib/formatters';
+import { TABLE, THEAD, TH, TBODY, TR, TD } from './AdminTable';
 
-const ORDER_BADGE_VARIANTS: Record<string, 'success' | 'warning' | 'error' | 'default'> = {
+const ORDER_BADGE_VARIANTS: Record<string, 'success' | 'warning' | 'error' | 'default' | 'neutral'> = {
   placed: 'warning',
-  confirmed: 'success',
-  processing: 'warning',
+  confirmed: 'default',
+  processing: 'default',
   shipped: 'default',
   delivered: 'success',
   cancelled: 'error',
-  returned: 'error',
+  returned: 'neutral',
 };
 
-interface AdminRecentOrdersTableProps {
-  recentOrders: RecentOrder[];
-}
-
-export default function AdminRecentOrdersTable({ recentOrders }: AdminRecentOrdersTableProps) {
+export default function AdminRecentOrdersTable({ recentOrders }: { recentOrders: RecentOrder[] }) {
   return (
-    <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold text-slate-900 dark:text-white">Recent orders</p>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Most recent orders from customers.</p>
-        </div>
+    <section className="rounded-xl border border-border bg-surface">
+      <div className="px-5 pt-5">
+        <CardHeader
+          title="Recent orders"
+          action={
+            <Link href="/admin/orders" className="text-sm font-semibold text-primary hover:underline">
+              View all
+            </Link>
+          }
+        />
       </div>
-
-      <div className="mt-6 overflow-x-auto">
-        <table className="min-w-full text-left text-sm text-slate-600 dark:text-slate-300">
-          <thead>
-            <tr>
-              <th className="py-3 pr-4 font-medium text-slate-500 uppercase">Order</th>
-              <th className="py-3 pr-4 font-medium text-slate-500 uppercase">Customer</th>
-              <th className="py-3 pr-4 font-medium text-slate-500 uppercase">Status</th>
-              <th className="py-3 pr-4 font-medium text-slate-500 uppercase">Total</th>
-              <th className="py-3 font-medium text-slate-500 uppercase">Date</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
-            {recentOrders.map((order) => (
-              <tr key={order._id} className="hover:bg-slate-50 dark:hover:bg-slate-950">
-                <td className="py-4 pr-4 font-medium text-slate-900 dark:text-white">{order.orderNumber}</td>
-                <td className="py-4 pr-4">{order.user.name}</td>
-                <td className="py-4 pr-4">
-                  <Badge variant={ORDER_BADGE_VARIANTS[order.status] ?? 'default'}>
-                    {order.status}
-                  </Badge>
-                </td>
-                <td className="py-4 pr-4">₹{order.pricing.total.toLocaleString()}</td>
-                <td className="py-4">{new Date(order.createdAt).toLocaleDateString()}</td>
+      {recentOrders.length === 0 ? (
+        <p className="px-5 pb-5 text-sm text-muted-foreground">No orders yet.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className={TABLE}>
+            <thead className={THEAD}>
+              <tr>
+                <th scope="col" className={TH}>Order</th>
+                <th scope="col" className={TH}>Customer</th>
+                <th scope="col" className={TH}>Status</th>
+                <th scope="col" className={`${TH} text-right`}>Total</th>
+                <th scope="col" className={TH}>Date</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody className={TBODY}>
+              {recentOrders.map((order) => (
+                <tr key={order._id} className={TR}>
+                  <td className={TD}>
+                    <Link href={`/admin/orders/${order._id}`} className="font-medium text-primary hover:underline">
+                      {order.orderNumber}
+                    </Link>
+                  </td>
+                  <td className={TD}>{order.user?.name}</td>
+                  <td className={TD}>
+                    <Badge variant={ORDER_BADGE_VARIANTS[order.status] ?? 'neutral'}>{order.status}</Badge>
+                  </td>
+                  <td className={`${TD} text-right tabular-nums`}>{formatPrice(order.pricing.total)}</td>
+                  <td className={`${TD} whitespace-nowrap text-muted-foreground`}>{formatDate(order.createdAt)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
   );
 }

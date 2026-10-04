@@ -20,6 +20,7 @@ const PAYMENT_BADGE_VARIANTS: Record<string, 'default' | 'success' | 'error' | '
   paid: 'success',
   failed: 'error',
   refunded: 'error',
+  refund_pending: 'warning',
 };
 
 interface AdminOrderTableProps {
@@ -46,7 +47,7 @@ export default function AdminOrderTable({ orders }: AdminOrderTableProps) {
           <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
             {orders.map((order) => (
               <tr key={order._id} className="hover:bg-slate-50 dark:hover:bg-slate-950">
-                <td className="px-4 py-4 font-medium text-slate-900 dark:text-white">#{order.orderNumber}</td>
+                <td className="whitespace-nowrap px-4 py-4 font-medium text-slate-900 dark:text-white">#{order.orderNumber}</td>
                 <td className="px-4 py-4">{order.user?.name ?? 'Guest'}</td>
                 <td className="px-4 py-4">{order.items.length}</td>
                 <td className="px-4 py-4">

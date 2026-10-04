@@ -4,7 +4,9 @@ import { useEffect, useRef, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { CheckCircle2, Package, ShoppingBag } from 'lucide-react';
+import { CheckCircle2, Clock, Package, ShoppingBag } from 'lucide-react';
+import Spinner from '@/components/ui/Spinner';
+import { buttonClasses } from '@/components/ui/Button';
 import api from '@/lib/api/axios';
 import { GA } from '@/lib/analytics';
 import type { Order } from '@/types/order';
@@ -40,147 +42,104 @@ export default function SuccessClient() {
       .finally(() => setLoading(false));
   }, [orderId, router]);
 
+  const awaitingPayment = order?.payment.method === 'razorpay' && order.payment.status !== 'paid';
+  const heading = !order ? 'Order placed' : awaitingPayment ? 'Order received' : 'Thank you for your order';
+  const message = !order
+    ? 'Your order has been placed successfully.'
+    : order.payment.method === 'cod'
+      ? 'Your order is confirmed. Please keep the amount ready for cash on delivery.'
+      : awaitingPayment
+        ? 'We are confirming your payment with Razorpay. Your order page will update once it is confirmed.'
+        : 'Your payment was received and your order is confirmed.';
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <Spinner label="Loading your order" />
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-16">
-      <div className="max-w-md w-full text-center">
-        {/* Animated checkmark */}
-        <motion.div
-          initial={{ scale: 0, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ type: 'spring', stiffness: 260, damping: 20, delay: 0.1 }}
-          className="flex justify-center mb-6"
-        >
-          <div className="w-24 h-24 rounded-full bg-green-100 flex items-center justify-center">
-            <CheckCircle2 className="w-12 h-12 text-green-500" />
+    <div className="mx-auto max-w-lg px-4 py-12 sm:py-16">
+      <div className="text-center">
+        <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.25 }} className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-success-subtle">
+          {awaitingPayment ? <Clock className="h-8 w-8 text-warning" aria-hidden="true" /> : <CheckCircle2 className="h-8 w-8 text-success" aria-hidden="true" />}
+        </motion.div>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">{heading}</h1>
+        <p className="mt-2 text-muted-foreground" role="status">
+          {message}
+        </p>
+      </div>
+
+      {order && (
+        <section aria-label="Order details" className="mt-8 rounded-xl border border-border bg-surface p-5">
+          <div className="flex items-center justify-between border-b border-border pb-4">
+            <div>
+              <p className="text-sm text-muted-foreground">Order number</p>
+              <p className="font-semibold text-foreground">#{order.orderNumber}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-sm text-muted-foreground">Date</p>
+              <p className="text-sm text-foreground">{formatDate(order.createdAt)}</p>
+            </div>
           </div>
-        </motion.div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="space-y-2 mb-8"
-        >
-          <h1 className="text-2xl font-bold text-gray-900">Order Placed!</h1>
-          <p className="text-gray-500">
-            Thank you for your purchase. We&apos;ll send you a confirmation shortly.
+          <ul className="space-y-2 py-4 text-sm">
+            {order.items.map((item, i) => (
+              <li key={i} className="flex justify-between gap-4">
+                <span className="min-w-0 truncate text-foreground">
+                  {item.name} <span className="text-muted-foreground">× {item.quantity}</span>
+                </span>
+                <span className="shrink-0 font-medium tabular-nums text-foreground">{formatPrice(item.price * item.quantity)}</span>
+              </li>
+            ))}
+          </ul>
+
+          <dl className="space-y-1.5 border-t border-border pt-4 text-sm tabular-nums">
+            <div className="flex justify-between text-muted-foreground">
+              <dt>Subtotal</dt>
+              <dd className="text-foreground">{formatPrice(order.pricing.subtotal)}</dd>
+            </div>
+            {order.pricing.discount > 0 && (
+              <div className="flex justify-between text-success">
+                <dt>Discount</dt>
+                <dd>−{formatPrice(order.pricing.discount)}</dd>
+              </div>
+            )}
+            <div className="flex justify-between text-muted-foreground">
+              <dt>Shipping{order.shippingAddress?.state ? ` (${order.shippingAddress.state})` : ''}</dt>
+              <dd className="text-foreground">{order.pricing.shipping === 0 ? 'Free' : formatPrice(order.pricing.shipping)}</dd>
+            </div>
+            {order.pricing.tax > 0 && (
+              <div className="flex justify-between text-muted-foreground">
+                <dt>Tax</dt>
+                <dd className="text-foreground">{formatPrice(order.pricing.tax)}</dd>
+              </div>
+            )}
+            <div className="flex justify-between pt-1 text-base font-bold text-foreground">
+              <dt>Total</dt>
+              <dd>{formatPrice(order.pricing.total)}</dd>
+            </div>
+          </dl>
+
+          <p className="mt-4 border-t border-border pt-4 text-sm text-muted-foreground">
+            Payment: <span className="font-medium text-foreground">{order.payment.method === 'cod' ? 'Cash on delivery' : 'Online (Razorpay)'}</span>
           </p>
-        </motion.div>
+        </section>
+      )}
 
-        {/* Order details card */}
-        {!loading && order && (
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.45 }}
-            className="bg-white rounded-2xl shadow-sm p-6 text-left mb-6 space-y-4"
-          >
-            <div className="flex justify-between items-center pb-3 border-b border-gray-100">
-              <div>
-                <p className="text-xs text-gray-500">Order number</p>
-                <p className="font-semibold text-gray-900">#{order.orderNumber}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-xs text-gray-500">Date</p>
-                <p className="text-sm text-gray-700">{formatDate(order.createdAt)}</p>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              {order.items.map((item, i) => (
-                <div key={i} className="flex justify-between text-sm">
-                  <span className="text-gray-700 truncate mr-4">
-                    {item.name}{' '}
-                    <span className="text-gray-400">× {item.quantity}</span>
-                  </span>
-                  <span className="font-medium text-gray-900 shrink-0">
-                    {formatPrice(item.price * item.quantity)}
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            <div className="border-t border-gray-100 pt-3 space-y-1.5 text-sm">
-              <div className="flex justify-between text-gray-500">
-                <span>Subtotal</span>
-                <span>{formatPrice(order.pricing.subtotal)}</span>
-              </div>
-              <div className="flex justify-between text-gray-500">
-                <span>Shipping {order.shippingAddress?.state ? `(${order.shippingAddress.state})` : ''}</span>
-                <span>
-                  {order.pricing.shipping === 0
-                    ? 'Free'
-                    : formatPrice(order.pricing.shipping)}
-                </span>
-              </div>
-              {order.pricing.discount > 0 && (
-                <div className="flex justify-between text-gray-500">
-                  <span>Discount</span>
-                  <span>-{formatPrice(order.pricing.discount)}</span>
-                </div>
-              )}
-              {order.pricing.tax > 0 && (
-                <div className="flex justify-between text-gray-500">
-                  <span>Tax</span>
-                  <span>{formatPrice(order.pricing.tax)}</span>
-                </div>
-              )}
-              <div className="flex justify-between font-bold text-gray-900 text-base pt-1">
-                <span>Grand Total</span>
-                <span>{formatPrice(order.pricing.total)}</span>
-              </div>
-            </div>
-
-            <div className="border-t border-gray-100 pt-3 text-sm text-gray-500">
-              <p>
-                Payment:{' '}
-                <span className="capitalize text-gray-700 font-medium">
-                  {order.payment.method === 'cod'
-                    ? 'Cash on Delivery'
-                    : 'Online (Razorpay)'}
-                </span>
-              </p>
-            </div>
-          </motion.div>
-        )}
-
-        {!loading && !order && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.4 }}
-            className="bg-white rounded-2xl shadow-sm p-6 mb-6"
-          >
-            <p className="text-gray-500 text-sm">
-              Your order has been placed successfully.
-            </p>
-          </motion.div>
-        )}
-
-        {/* CTAs */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.6 }}
-          className="flex flex-col sm:flex-row gap-3"
-        >
-          {order && (
-            <Link
-              href={`/account/orders/${order._id}`}
-              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-primary text-primary font-semibold hover:bg-primary/5 transition-colors"
-            >
-              <Package className="w-4 h-4" />
-              Track Order
-            </Link>
-          )}
-          <Link
-            href="/products"
-            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-primary text-white font-semibold hover:bg-primary-dark transition-colors"
-          >
-            <ShoppingBag className="w-4 h-4" />
-            Continue Shopping
+      <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+        {order && (
+          <Link href={`/account/orders/${order._id}`} className={buttonClasses({ variant: 'outline', size: 'lg' }, 'flex-1')}>
+            <Package className="h-4 w-4" aria-hidden="true" />
+            View order
           </Link>
-        </motion.div>
+        )}
+        <Link href="/products" className={buttonClasses({ size: 'lg' }, 'flex-1')}>
+          <ShoppingBag className="h-4 w-4" aria-hidden="true" />
+          Continue shopping
+        </Link>
       </div>
     </div>
   );

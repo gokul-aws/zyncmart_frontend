@@ -4,8 +4,13 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Star, X, Loader2 } from 'lucide-react';
+import { Star } from 'lucide-react';
 import { useAddReview } from '@/hooks/useReviews';
+import Field from '@/components/ui/Field';
+import { Input, Textarea } from '@/components/ui/Input';
+import Button from '@/components/ui/Button';
+import Card from '@/components/ui/Card';
+import { cn } from '@/lib/utils';
 
 const reviewSchema = z.object({
   rating: z.number().min(1, 'Please select a rating').max(5),
@@ -21,6 +26,8 @@ interface AddReviewProps {
   onCancel?: () => void;
 }
 
+const LABELS = ['', 'Poor', 'Fair', 'Good', 'Very good', 'Excellent'];
+
 export default function AddReview({ productSlug, onSuccess, onCancel }: AddReviewProps) {
   const [hoveredRating, setHoveredRating] = useState(0);
   const addReviewMutation = useAddReview(productSlug);
@@ -33,122 +40,72 @@ export default function AddReview({ productSlug, onSuccess, onCancel }: AddRevie
     formState: { errors },
   } = useForm<ReviewFormValues>({
     resolver: zodResolver(reviewSchema),
-    defaultValues: {
-      rating: 0,
-      title: '',
-      body: '',
-    },
+    defaultValues: { rating: 0, title: '', body: '' },
   });
 
   const rating = watch('rating');
 
   const onSubmit = (data: ReviewFormValues) => {
     addReviewMutation.mutate(
-      {
-        ...data,
-        title: data.title || undefined,
-      },
-      {
-        onSuccess: () => {
-          onSuccess?.();
-        },
-      }
+      { ...data, title: data.title || undefined },
+      { onSuccess: () => onSuccess?.() }
     );
   };
 
   return (
-    <div className="bg-gray-50 rounded-2xl p-6 md:p-8">
-      <div className="flex items-center justify-between mb-6">
-        <h3 className="text-lg font-bold text-gray-900">Write a Review</h3>
-        {onCancel && (
-          <button onClick={onCancel} className="text-gray-400 hover:text-gray-600 transition-colors">
-            <X className="w-5 h-5" />
-          </button>
-        )}
-      </div>
-
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        {/* Rating */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Rating</label>
-          <div className="flex gap-1.5">
+    <Card>
+      <h3 className="mb-5 text-lg font-semibold text-foreground">Write a review</h3>
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
+        {/* Star rating as a radio group: keyboard arrows work natively. */}
+        <fieldset aria-describedby={errors.rating ? 'review-rating-error' : undefined}>
+          <legend className="mb-2 text-sm font-medium text-foreground">
+            Rating<span className="text-error" aria-hidden="true"> *</span>
+          </legend>
+          <div className="flex items-center gap-1" onMouseLeave={() => setHoveredRating(0)}>
             {[1, 2, 3, 4, 5].map((star) => (
-              <button
-                key={star}
-                type="button"
-                onClick={() => setValue('rating', star, { shouldValidate: true })}
-                onMouseEnter={() => setHoveredRating(star)}
-                onMouseLeave={() => setHoveredRating(0)}
-                className="transition-transform active:scale-90"
-              >
-                <Star
-                  className={`w-8 h-8 ${
-                    star <= (hoveredRating || rating)
-                      ? 'fill-amber-400 text-amber-400'
-                      : 'fill-gray-200 text-gray-200'
-                  }`}
+              <label key={star} className="cursor-pointer rounded-md p-1 has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-primary" onMouseEnter={() => setHoveredRating(star)}>
+                <input
+                  type="radio"
+                  name="rating"
+                  value={star}
+                  checked={rating === star}
+                  onChange={() => setValue('rating', star, { shouldValidate: true })}
+                  className="sr-only"
                 />
-              </button>
+                <span className="sr-only">
+                  {star} star{star === 1 ? '' : 's'}, {LABELS[star]}
+                </span>
+                <Star className={cn('h-8 w-8', star <= (hoveredRating || rating) ? 'fill-amber-500 text-amber-500' : 'fill-gray-200 text-gray-300')} aria-hidden="true" />
+              </label>
             ))}
+            {(hoveredRating || rating) > 0 && <span className="ml-2 text-sm text-muted-foreground">{LABELS[hoveredRating || rating]}</span>}
           </div>
           {errors.rating && (
-            <p className="mt-1 text-xs text-red-500">{errors.rating.message}</p>
+            <p id="review-rating-error" className="mt-1.5 text-sm font-medium text-error">
+              {errors.rating.message}
+            </p>
           )}
-        </div>
+        </fieldset>
 
-        {/* Title */}
-        <div>
-          <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-2">
-            Title (Optional)
-          </label>
-          <input
-            {...register('title')}
-            id="title"
-            placeholder="Sum up your experience"
-            className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm"
-          />
-          {errors.title && (
-            <p className="mt-1 text-xs text-red-500">{errors.title.message}</p>
-          )}
-        </div>
+        <Field label="Title" hint="Optional" error={errors.title?.message}>
+          <Input {...register('title')} placeholder="Sum up your experience" />
+        </Field>
 
-        {/* Body */}
-        <div>
-          <label htmlFor="body" className="block text-sm font-medium text-gray-700 mb-2">
-            Your Review
-          </label>
-          <textarea
-            {...register('body')}
-            id="body"
-            rows={4}
-            placeholder="What did you like or dislike? How was the quality?"
-            className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm resize-none"
-          />
-          {errors.body && (
-            <p className="mt-1 text-xs text-red-500">{errors.body.message}</p>
-          )}
-        </div>
+        <Field label="Your review" required error={errors.body?.message}>
+          <Textarea {...register('body')} rows={4} placeholder="What did you like or dislike? How was the quality?" />
+        </Field>
 
-        <div className="flex flex-col sm:flex-row gap-3">
-          <button
-            type="submit"
-            disabled={addReviewMutation.isPending}
-            className="flex-1 bg-black text-white py-3 rounded-xl font-bold text-sm hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-          >
-            {addReviewMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-            Submit Review
-          </button>
+        <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
           {onCancel && (
-            <button
-              type="button"
-              onClick={onCancel}
-              className="flex-1 bg-white border border-gray-200 text-gray-700 py-3 rounded-xl font-bold text-sm hover:bg-gray-50 transition-colors"
-            >
+            <Button variant="outline" onClick={onCancel}>
               Cancel
-            </button>
+            </Button>
           )}
+          <Button type="submit" loading={addReviewMutation.isPending}>
+            Submit review
+          </Button>
         </div>
       </form>
-    </div>
+    </Card>
   );
 }

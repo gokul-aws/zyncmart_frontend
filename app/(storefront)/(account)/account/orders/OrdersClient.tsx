@@ -7,6 +7,9 @@ import { fetchUserOrders } from '@/lib/api/orders';
 import OrderCard from '@/components/account/OrderCard';
 import EmptyState from '@/components/ui/EmptyState';
 import type { OrderStatus } from '@/types/order';
+import Skeleton from '@/components/ui/Skeleton';
+import Alert from '@/components/ui/Alert';
+import { cn } from '@/lib/utils';
 
 type Filter = 'all' | 'active' | 'delivered' | 'cancelled';
 
@@ -38,17 +41,19 @@ export default function OrdersClient() {
 
   return (
     <div className="space-y-5">
-      <h1 className="text-xl font-bold text-gray-900">My Orders</h1>
+      <h1 className="text-2xl font-bold tracking-tight text-foreground">My orders</h1>
 
-      {/* Filter tabs */}
-      <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit">
+      <div role="group" aria-label="Filter orders" className="scrollbar-hide flex gap-1 overflow-x-auto rounded-lg bg-surface-muted p-1 sm:w-fit">
         {TABS.map((tab) => (
           <button
             key={tab.key}
+            type="button"
             onClick={() => setFilter(tab.key)}
-            className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-colors ${
-              filter === tab.key ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-            }`}
+            aria-pressed={filter === tab.key}
+            className={cn(
+              'h-9 shrink-0 rounded-md px-4 text-sm font-medium transition-colors',
+              filter === tab.key ? 'bg-surface text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+            )}
           >
             {tab.label}
           </button>
@@ -56,31 +61,32 @@ export default function OrdersClient() {
       </div>
 
       {isLoading && (
-        <div className="space-y-3">
+        <div className="space-y-3" role="status" aria-label="Loading orders">
           {[...Array(3)].map((_, i) => (
-            <div key={i} className="h-28 bg-gray-100 rounded-xl animate-pulse" />
+            <Skeleton key={i} className="h-36 rounded-xl" />
           ))}
         </div>
       )}
 
-      {isError && (
-        <p className="text-sm text-error">Failed to load orders. Please refresh.</p>
-      )}
+      {isError && <Alert variant="error" title="Orders could not be loaded">Please refresh the page to try again.</Alert>}
 
       {!isLoading && !isError && filtered.length === 0 && (
         <EmptyState
-          title="No orders found"
-          description="Your orders will appear here once you make a purchase."
-          action={{ label: 'Start Shopping', href: '/products' }}
-          icon={<Package className="w-14 h-14" />}
+          compact
+          title={filter === 'all' ? 'No orders yet' : 'No orders here'}
+          description={filter === 'all' ? 'Your orders will appear here once you make a purchase.' : 'Try another filter.'}
+          action={filter === 'all' ? { label: 'Start shopping', href: '/products' } : undefined}
+          icon={<Package />}
         />
       )}
 
-      <div className="space-y-3">
+      <ul className="space-y-3">
         {filtered.map((order) => (
-          <OrderCard key={order._id} order={order} />
+          <li key={order._id}>
+            <OrderCard order={order} />
+          </li>
         ))}
-      </div>
+      </ul>
     </div>
   );
 }

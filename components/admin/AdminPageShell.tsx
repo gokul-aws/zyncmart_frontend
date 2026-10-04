@@ -12,18 +12,19 @@ interface AdminPageShellProps {
 
 export default function AdminPageShell({ title, description, actions, children }: AdminPageShellProps) {
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div className="space-y-3">
         <AdminBreadcrumbs />
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
-            <h1 className="text-3xl font-semibold text-slate-900 dark:text-white">{title}</h1>
-            {description && <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">{description}</p>}
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">{title}</h1>
+            {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
           </div>
-          {actions && <div className="flex items-center gap-3">{actions}</div>}
+          {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
         </div>
       </div>
-      <div className="grid gap-6">{children}</div>
+      {/* min-w-0: wide tables scroll inside their card instead of widening the page. */}
+      <div className="grid gap-6 [&>*]:min-w-0">{children}</div>
     </div>
   );
 }

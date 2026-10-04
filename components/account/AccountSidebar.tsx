@@ -2,58 +2,84 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Package, MapPin, Heart, User, LogOut } from 'lucide-react';
+import { Package, MapPin, Heart, User, KeyRound, LogOut } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 
 const NAV_ITEMS = [
-  { label: 'My Orders', href: '/account/orders', icon: Package },
+  { label: 'Orders', href: '/account/orders', icon: Package },
   { label: 'Addresses', href: '/account/addresses', icon: MapPin },
   { label: 'Wishlist', href: '/account/wishlist', icon: Heart },
   { label: 'Profile', href: '/account', icon: User },
+  { label: 'Password', href: '/account/change-password', icon: KeyRound },
 ];
 
+const isActive = (pathname: string, href: string) => pathname === href || (href !== '/account' && pathname.startsWith(href));
+
+/** Account navigation: sidebar on large screens, scrollable tab bar on smaller ones. */
 export default function AccountSidebar() {
   const pathname = usePathname();
   const { user, signOut } = useAuth();
 
   return (
-    <aside className="w-56 shrink-0">
-      {/* User info */}
-      <div className="mb-4 px-3 py-3 bg-primary-light rounded-xl">
-        <p className="text-xs text-gray-500">Signed in as</p>
-        <p className="font-semibold text-gray-900 truncate text-sm">{user?.name}</p>
-        <p className="text-xs text-gray-500 truncate">{user?.email}</p>
-      </div>
-
-      <nav className="space-y-0.5">
+    <>
+      {/* Small screens */}
+      <nav aria-label="Account" className="scrollbar-hide -mx-4 mb-6 flex gap-2 overflow-x-auto px-4 sm:-mx-6 sm:px-6 lg:hidden">
         {NAV_ITEMS.map(({ label, href, icon: Icon }) => {
-          const active = pathname === href || (href !== '/account' && pathname.startsWith(href));
+          const active = isActive(pathname, href);
           return (
             <Link
               key={href}
               href={href}
+              aria-current={active ? 'page' : undefined}
               className={cn(
-                'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
-                active
-                  ? 'bg-primary text-white'
-                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                'inline-flex h-10 shrink-0 items-center gap-2 rounded-full border px-4 text-sm font-medium transition-colors',
+                active ? 'border-ink bg-ink text-white' : 'border-border-strong bg-surface text-foreground hover:bg-surface-muted'
               )}
             >
-              <Icon className="w-4 h-4 shrink-0" />
+              <Icon className="h-4 w-4" aria-hidden="true" />
               {label}
             </Link>
           );
         })}
-
-        <button
-          onClick={signOut}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-error hover:bg-red-50 transition-colors"
-        >
-          <LogOut className="w-4 h-4 shrink-0" />
-          Logout
-        </button>
       </nav>
-    </aside>
+
+      {/* Large screens */}
+      <aside className="hidden w-60 shrink-0 lg:block">
+        <div className="mb-4 rounded-xl border border-border bg-surface p-4">
+          <p className="text-sm text-muted-foreground">Signed in as</p>
+          <p className="truncate font-semibold text-foreground">{user?.name}</p>
+          <p className="truncate text-sm text-muted-foreground">{user?.email}</p>
+        </div>
+
+        <nav aria-label="Account" className="space-y-1">
+          {NAV_ITEMS.map(({ label, href, icon: Icon }) => {
+            const active = isActive(pathname, href);
+            return (
+              <Link
+                key={href}
+                href={href}
+                aria-current={active ? 'page' : undefined}
+                className={cn(
+                  'flex h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors',
+                  active ? 'bg-surface-muted text-foreground' : 'text-muted-foreground hover:bg-surface-muted hover:text-foreground'
+                )}
+              >
+                <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                {label}
+              </Link>
+            );
+          })}
+          <button
+            type="button"
+            onClick={signOut}
+            className="flex h-11 w-full items-center gap-3 rounded-lg px-3 text-sm font-medium text-error transition-colors hover:bg-error-subtle"
+          >
+            <LogOut className="h-4 w-4 shrink-0" aria-hidden="true" />
+            Sign out
+          </button>
+        </nav>
+      </aside>
+    </>
   );
 }

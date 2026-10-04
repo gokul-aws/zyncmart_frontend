@@ -5,19 +5,12 @@ import { toast } from 'sonner';
 import { useAuthStore } from '@/lib/store/authStore';
 import { useCartStore } from '@/lib/store/cartStore';
 import { createPaymentOrder, verifyPayment } from '@/lib/api/payments';
+import { getApiError } from '@/lib/api/orders';
 
 declare global {
   interface Window {
     Razorpay: new (options: RazorpayOptions) => RazorpayInstance;
   }
-}
-
-interface RazorpayCheckoutConfig {
-  display: {
-    blocks: Record<string, { name: string; instruments: Array<{ method: string }> }>;
-    sequence: string[];
-    preferences: { show_default_blocks: boolean };
-  };
 }
 
 interface RazorpayOptions {
@@ -33,12 +26,13 @@ interface RazorpayOptions {
   theme?: { color?: string };
   modal?: { ondismiss?: () => void };
   customer_id?: string;
-  config?: RazorpayCheckoutConfig;
+  /** Seconds until Checkout closes itself (the order's remaining payment window). */
+  timeout?: number;
 }
 
 interface RazorpayInstance {
   open(): void;
-  on(event: 'payment.failed', handler: (response: RazorpayFailureResponse) => void): void;
+  on(event: string, handler: () => void): void;
 }
 
 interface RazorpayResponse {
@@ -47,46 +41,19 @@ interface RazorpayResponse {
   razorpay_signature: string;
 }
 
-// Shape of the event Razorpay's checkout.js emits on `payment.failed` — never
-// includes raw card/CVV data, only the gateway's own error metadata, so it's
-// safe to log for debugging.
-interface RazorpayFailureResponse {
-  error: {
-    code: string;
-    description: string;
-    source?: string;
-    step?: string;
-    reason?: string;
-    metadata?: { order_id?: string; payment_id?: string };
-  };
-}
-
 const SITE_NAME = process.env.NEXT_PUBLIC_SITE_NAME ?? 'Store';
 const RAZORPAY_KEY = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ?? '';
-
-// We only accept Cards and UPI — this is Razorpay's documented
-// config.display mechanism for restricting Checkout's payment method list
-// (not a CSS hide, which Razorpay still renders and can flash before styles
-// apply). `show_default_blocks: false` means ONLY the blocks listed below
-// are shown — Netbanking/Wallets/EMI/Pay Later never appear.
-// https://razorpay.com/docs/payments/payment-gateway/web-integration/standard/configure-payment-methods/
-const CHECKOUT_METHODS_CONFIG: RazorpayCheckoutConfig = {
-  display: {
-    blocks: {
-      recommended: {
-        name: 'Pay via UPI or Card',
-        instruments: [{ method: 'upi' }, { method: 'card' }],
-      },
-    },
-    sequence: ['block.recommended'],
-    preferences: { show_default_blocks: false },
-  },
-};
 
 export function useRazorpay() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const clearCart = useCartStore((s) => s.clearCart);
+  const loadCart = useCartStore((s) => s.loadCart);
+
+  // The order (and its reserved stock) already exists. If payment does not
+  // complete now, the customer finishes it from the order page ("Complete
+  // Payment") while the 30-minute window lasts.
+  const goToOrder = (orderId: string) => router.push(`/account/orders/${orderId}`);
 
   const initiatePayment = async (
     orderId: string,
@@ -102,12 +69,19 @@ export function useRazorpay() {
     let paymentOrderData;
     try {
       paymentOrderData = await createPaymentOrder(orderId);
-    } catch {
-      toast.error('Failed to create payment order. Please try again.');
+    } catch (err) {
+      const { code, message } = getApiError(err, 'Failed to start the payment. Please try again.');
+      toast.error(message);
+      if (code === 'ORDER_NOT_PAYABLE' || code === 'ORDER_ALREADY_PAID') goToOrder(orderId);
       return;
     }
 
-    const { razorpayOrderId, amount, currency, keyId } = paymentOrderData;
+    const { razorpayOrderId, amount, currency, keyId, remainingSeconds } = paymentOrderData;
+    if (remainingSeconds === 0) {
+      toast.error('The payment window for this order has ended.');
+      goToOrder(orderId);
+      return;
+    }
 
     return new Promise<void>((resolve, reject) => {
       const options: RazorpayOptions = {
@@ -117,20 +91,28 @@ export function useRazorpay() {
         order_id: razorpayOrderId,
         name: SITE_NAME,
         description: `Order #${orderNumber}`,
-        image: '/logo.png',
+        image: '/zyncmart_logo.png',
+        ...(typeof remainingSeconds === 'number' ? { timeout: remainingSeconds } : {}),
         handler: async (response) => {
           try {
-            await verifyPayment({
+            const { code } = await verifyPayment({
               orderId,
               razorpayOrderId: response.razorpay_order_id,
               razorpayPaymentId: response.razorpay_payment_id,
               razorpaySignature: response.razorpay_signature,
             });
             (onPaymentSuccess ?? clearCart)();
-            router.push(`/checkout/success?orderId=${orderId}`);
+            if (code === 'PAYMENT_PENDING') {
+              toast.info('Payment received — we are confirming it with the bank.');
+              goToOrder(orderId);
+            } else {
+              router.push(`/checkout/success?orderId=${orderId}`);
+            }
             resolve();
-          } catch {
-            toast.error('Payment verification failed. Contact support if amount was debited.');
+          } catch (err) {
+            // The server explains the outcome (e.g. order expired → refund initiated).
+            toast.error(getApiError(err, 'Payment verification failed. Contact support if money was debited.').message);
+            goToOrder(orderId);
             reject(new Error('verification_failed'));
           }
         },
@@ -143,27 +125,19 @@ export function useRazorpay() {
         theme: { color: '#1565d8' },
         modal: {
           ondismiss: () => {
-            toast.info('Payment cancelled.');
+            toast.info('Payment not completed. You can complete it from your order within 30 minutes.');
+            loadCart().catch(() => {}); // the server cart became this order
+            goToOrder(orderId);
             reject(new Error('dismissed'));
           },
         },
-        config: CHECKOUT_METHODS_CONFIG,
       };
 
       const rzp = new window.Razorpay(options);
-      rzp.on('payment.failed', (response) => {
-        const { code, description, reason, metadata } = response.error ?? {};
-        // Non-sensitive gateway metadata only (order/payment IDs, error
-        // code/reason) — never card numbers, CVV, or the Razorpay secret.
-        console.error('[razorpay] payment.failed', {
-          razorpayOrderId: metadata?.order_id ?? razorpayOrderId,
-          razorpayPaymentId: metadata?.payment_id,
-          code,
-          reason,
-          description,
-        });
-        toast.error(description || 'Payment failed. Please try again.');
-        reject(new Error('payment_failed'));
+      // A failed attempt is not final: Checkout stays open so the customer can
+      // try again, and the order keeps its reserved stock until it expires.
+      rzp.on('payment.failed', () => {
+        toast.error('Payment failed. You can try again.');
       });
       rzp.open();
     });

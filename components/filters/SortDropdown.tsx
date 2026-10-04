@@ -1,18 +1,21 @@
 'use client';
+import { useId } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import type { ProductFilters } from '@/types/product';
+import { Select } from '@/components/ui/Input';
 
 const OPTIONS: { label: string; value: NonNullable<ProductFilters['sortBy']> }[] = [
-  { label: 'Newest First', value: 'newest' },
-  { label: 'Price: Low to High', value: 'price_asc' },
-  { label: 'Price: High to Low', value: 'price_desc' },
-  { label: 'Top Rated', value: 'rating' },
+  { label: 'Newest first', value: 'newest' },
+  { label: 'Price: low to high', value: 'price_asc' },
+  { label: 'Price: high to low', value: 'price_desc' },
+  { label: 'Top rated', value: 'rating' },
 ];
 
 export default function SortDropdown() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const current = searchParams.get('sortBy') ?? 'newest';
+  const id = useId();
 
   const handleChange = (value: string) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -23,18 +26,16 @@ export default function SortDropdown() {
 
   return (
     <div className="flex items-center gap-2">
-      <span className="text-sm text-gray-500 hidden sm:inline">Sort:</span>
-      <select
-        value={current}
-        onChange={(e) => handleChange(e.target.value)}
-        className="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-primary focus:outline-none cursor-pointer"
-      >
+      <label htmlFor={id} className="hidden whitespace-nowrap text-sm text-muted-foreground sm:block">
+        Sort by
+      </label>
+      <Select id={id} value={current} onChange={(e) => handleChange(e.target.value)} aria-label="Sort products" className="w-44">
         {OPTIONS.map((opt) => (
           <option key={opt.value} value={opt.value}>
             {opt.label}
           </option>
         ))}
-      </select>
+      </Select>
     </div>
   );
 }

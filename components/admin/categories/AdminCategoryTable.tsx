@@ -1,144 +1,120 @@
 'use client';
 
+import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { Pencil, Trash2 } from 'lucide-react';
 import type { Category } from '@/types/category';
 import { useDeleteCategory } from '@/hooks/useAdminCategories';
+import Badge from '@/components/ui/Badge';
+import Skeleton from '@/components/ui/Skeleton';
+import { ConfirmDialog } from '@/components/ui/Dialog';
+import { AdminTableCard, TABLE, THEAD, TH, TBODY, TR, TD } from '@/components/admin/AdminTable';
 
 interface AdminCategoryTableProps {
   categories: Category[];
   isLoading?: boolean;
 }
 
-const SKELETON_ROWS = 3;
+const HEADERS = ['Image', 'Name', 'Parent', 'Sort', 'Status'];
+const ACTION = 'inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground';
 
 export default function AdminCategoryTable({ categories, isLoading }: AdminCategoryTableProps) {
   const deleteMutation = useDeleteCategory();
-
-  const handleDelete = async (id: string, name: string) => {
-    if (window.confirm(`Are you sure you want to delete "${name}"?`)) {
-      await deleteMutation.mutateAsync(id);
-    }
-  };
-
+  const [pendingDelete, setPendingDelete] = useState<Category | null>(null);
   const categoryById = Object.fromEntries(categories.map((c) => [c._id, c]));
 
-  if (isLoading) {
+  if (!isLoading && categories.length === 0) {
     return (
-      <div className="rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-slate-50 dark:bg-slate-800">
-            <tr>
-              {['Image', 'Name', 'Parent', 'Sort', 'Status', 'Actions'].map((h) => (
-                <th key={h} className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-slate-100">
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {[...Array(SKELETON_ROWS)].map((_, i) => (
-              <tr key={i} className="border-t border-slate-200 dark:border-slate-700">
-                <td className="px-6 py-4"><div className="h-10 w-10 bg-slate-200 dark:bg-slate-700 rounded-lg" /></td>
-                <td className="px-6 py-4"><div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-28" /></td>
-                <td className="px-6 py-4"><div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-20" /></td>
-                <td className="px-6 py-4"><div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-8" /></td>
-                <td className="px-6 py-4"><div className="h-5 bg-slate-200 dark:bg-slate-700 rounded-full w-16" /></td>
-                <td className="px-6 py-4"><div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-16 mx-auto" /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    );
-  }
-
-  if (categories.length === 0) {
-    return (
-      <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-8 text-center">
-        <p className="text-slate-500 dark:text-slate-400">No categories found. Create one to get started.</p>
+      <div className="rounded-xl border border-dashed border-border-strong p-8 text-center text-sm text-muted-foreground">
+        No categories yet. Create one to get started.
       </div>
     );
   }
 
   return (
-    <div className="rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
-      <table className="w-full">
-        <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
-          <tr>
-            <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-slate-100">Image</th>
-            <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-slate-100">Name</th>
-            <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-slate-100">Parent</th>
-            <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-slate-100">Sort</th>
-            <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-slate-100">Status</th>
-            <th className="px-6 py-4 text-center text-sm font-semibold text-slate-900 dark:text-slate-100">Actions</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
-          {categories.map((category) => (
-            <tr key={category._id} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-              <td className="px-6 py-4">
-                {category.image?.url ? (
-                  <div className="relative h-10 w-10 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 flex-shrink-0">
-                    <Image
-                      src={category.image.url}
-                      alt={category.name}
-                      fill
-                      className="object-cover"
-                    />
-                  </div>
-                ) : (
-                  <div className="h-10 w-10 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-400 text-xs">
-                    —
-                  </div>
-                )}
-              </td>
-              <td className="px-6 py-4">
-                <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{category.name}</p>
-                {category.description && (
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 max-w-xs truncate">
-                    {category.description}
-                  </p>
-                )}
-              </td>
-              <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">
-                {category.parent ? (categoryById[category.parent]?.name ?? <span className="text-slate-400">—</span>) : <span className="text-slate-400">—</span>}
-              </td>
-              <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">
-                {category.sortOrder ?? '—'}
-              </td>
-              <td className="px-6 py-4">
-                <span
-                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                    category.isActive
-                      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
-                      : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400'
-                  }`}
-                >
-                  {category.isActive ? 'Active' : 'Inactive'}
-                </span>
-              </td>
-              <td className="px-6 py-4 text-center">
-                <div className="flex gap-2 justify-center">
-                  <Link
-                    href={`/admin/categories/${category._id}/edit`}
-                    className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-300 transition-colors"
-                  >
-                    Edit
-                  </Link>
-                  <button
-                    onClick={() => handleDelete(category._id, category.name)}
-                    disabled={deleteMutation.isPending}
-                    className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md bg-rose-100 text-rose-700 hover:bg-rose-200 dark:bg-rose-900/30 dark:text-rose-300 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </td>
+    <>
+      <AdminTableCard>
+        <table className={TABLE}>
+          <thead className={THEAD}>
+            <tr>
+              {HEADERS.map((h) => (
+                <th key={h} scope="col" className={TH}>
+                  {h}
+                </th>
+              ))}
+              <th scope="col" className={`${TH} text-right`}>
+                Actions
+              </th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody className={TBODY}>
+            {isLoading
+              ? [...Array(3)].map((_, i) => (
+                  <tr key={i}>
+                    {[...Array(HEADERS.length + 1)].map((__, j) => (
+                      <td key={j} className={TD}>
+                        <Skeleton className={j === 0 ? 'h-10 w-10 rounded-lg' : 'h-4 w-20'} />
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              : categories.map((category) => (
+                  <tr key={category._id} className={TR}>
+                    <td className={TD}>
+                      <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-surface-muted">
+                        {category.image?.url && <Image src={category.image.url} alt="" fill sizes="40px" className="object-cover" />}
+                      </div>
+                    </td>
+                    <td className={TD}>
+                      <p className="font-medium text-foreground">{category.name}</p>
+                      {category.description && <p className="mt-0.5 max-w-xs truncate text-sm text-muted-foreground">{category.description}</p>}
+                    </td>
+                    <td className={`${TD} text-muted-foreground`}>{category.parent ? categoryById[category.parent]?.name ?? '—' : '—'}</td>
+                    <td className={`${TD} tabular-nums text-muted-foreground`}>{category.sortOrder ?? '—'}</td>
+                    <td className={TD}>
+                      <Badge variant={category.isActive ? 'success' : 'neutral'}>{category.isActive ? 'Active' : 'Inactive'}</Badge>
+                    </td>
+                    <td className={`${TD} whitespace-nowrap text-right`}>
+                      <Link href={`/admin/categories/${category._id}/edit`} className={ACTION} aria-label={`Edit ${category.name}`} title="Edit">
+                        <Pencil className="h-4 w-4" aria-hidden="true" />
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => setPendingDelete(category)}
+                        disabled={deleteMutation.isPending}
+                        className={`${ACTION} hover:bg-error-subtle hover:text-error disabled:opacity-50`}
+                        aria-label={`Deactivate ${category.name}`}
+                        title="Deactivate"
+                      >
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+          </tbody>
+        </table>
+      </AdminTableCard>
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title={`Deactivate "${pendingDelete?.name ?? ''}"?`}
+        // The API deactivates (soft-deletes) categories. Inactive categories are not
+        // listed here, and the admin panel has no reactivate control yet.
+        description="It will be hidden from the store and from this list. The admin panel can't reactivate categories yet."
+        confirmLabel="Deactivate category"
+        destructive
+        loading={deleteMutation.isPending}
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={async () => {
+          if (!pendingDelete) return;
+          try {
+            await deleteMutation.mutateAsync(pendingDelete._id);
+          } finally {
+            setPendingDelete(null);
+          }
+        }}
+      />
+    </>
   );
 }

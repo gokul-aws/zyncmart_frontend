@@ -9,6 +9,7 @@ import {
   updateAdminOrderStatus,
 } from '@/lib/api/orders';
 import type { Order, OrderStatus, PaymentStatus } from '@/types/order';
+import type { UpdateAdminOrderStatusPayload } from '@/lib/api/orders';
 import type { PaginatedResponse } from '@/types/api';
 
 export interface AdminOrderFilters {
@@ -41,7 +42,7 @@ export function useUpdateAdminOrderStatus() {
   const router = useRouter();
 
   return useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: { status?: OrderStatus; tracking?: { carrier?: string; trackingNumber?: string; url?: string }; paymentStatus?: PaymentStatus } }) =>
+    mutationFn: ({ id, payload }: { id: string; payload: UpdateAdminOrderStatusPayload }) =>
       updateAdminOrderStatus(id, payload),
     onSuccess: (order) => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'orders'] });
@@ -50,7 +51,8 @@ export function useUpdateAdminOrderStatus() {
       router.refresh();
     },
     onError: (error: any) => {
-      toast.error(error?.response?.data?.message || error?.message || 'Failed to update order.');
+      // The server explains rejected transitions (e.g. "An online order cannot be progressed until its payment is confirmed").
+      toast.error(error?.response?.data?.error || error?.response?.data?.message || error?.message || 'Failed to update order.');
     },
   });
 }

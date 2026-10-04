@@ -1,123 +1,116 @@
 import Link from 'next/link';
 import Image from 'next/image';
+import { ShieldCheck, Truck, RotateCcw } from 'lucide-react';
+import FooterCategoryLinks from './FooterCategoryLinks';
 
-const SHOP_LINKS = [
-  { label: 'All Products', href: '/products' },
-  { label: 'Jewellery', href: '/categories/jewellery' },
-  { label: 'Toys', href: '/categories/toys' },
-  { label: 'Home Accessories', href: '/categories/home-accessories' },
-];
+const LINK = 'inline-block py-1 text-sm text-white/70 transition-colors hover:text-white';
 
 const ACCOUNT_LINKS = [
-  { label: 'My Account', href: '/account' },
-  { label: 'My Orders', href: '/account/orders' },
+  { label: 'My account', href: '/account' },
+  { label: 'My orders', href: '/account/orders' },
   { label: 'Wishlist', href: '/account/wishlist' },
   { label: 'Addresses', href: '/account/addresses' },
 ];
 
-const COMPANY_LINKS = [
-  { label: 'About Us', href: '/about' },
-  { label: 'Contact', href: '/contact' },
-  { label: 'Privacy Policy', href: '/policies/privacy-policy' },
-  { label: 'Terms of Service', href: '/policies/terms-of-service' },
-  { label: 'Shipping Policy', href: '/policies/shipping-policy' },
+// Slugs must match app/(storefront)/(cms)/policies/[slug].
+const HELP_LINKS = [
+  { label: 'About us', href: '/about' },
+  { label: 'Contact us', href: '/contact' },
+  { label: 'Shipping policy', href: '/policies/shipping' },
+  { label: 'Returns & refunds', href: '/policies/returns' },
+  { label: 'Privacy policy', href: '/policies/privacy' },
+  { label: 'Terms & conditions', href: '/policies/terms' },
 ];
 
+// Each line reflects implemented behaviour: free shipping from ₹999 and COD up
+// to ₹10,000 (backend shipping policy), Razorpay payments, and the published
+// returns policy (eligible items, 7 days).
+const ASSURANCES = [
+  { icon: Truck, text: 'Free shipping on orders from ₹999' },
+  { icon: ShieldCheck, text: 'Secure payments by Razorpay · Cash on delivery' },
+  { icon: RotateCcw, text: '7-day returns on eligible items', href: '/policies/returns' },
+];
+
+function Column({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <h2 className="mb-3 text-sm font-semibold text-white">{title}</h2>
+      <ul>{children}</ul>
+    </div>
+  );
+}
+
 export default function Footer() {
-  const siteName = process.env.NEXT_PUBLIC_SITE_NAME ?? 'Store';
+  const siteName = process.env.NEXT_PUBLIC_SITE_NAME ?? 'Zyncmart';
   const whatsappNumber = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER;
 
   return (
-    <footer className="bg-secondary text-white/60 mt-auto">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-          {/* Brand */}
-          <div className="flex flex-col items-center sm:items-start">
-            <Image
-              src="/zyncmart_logo.png"
-              alt="Zyncmart"
-              width={779}
-              height={320}
-              className="h-10 sm:h-12 md:h-14 lg:h-16 w-auto object-contain mb-3"
-            />
-            <p className="text-sm leading-relaxed text-center sm:text-left">
-              Jewellery, toys and home accessories crafted with love. Free shipping above ₹999.
-            </p>
+    <footer className="mt-auto bg-ink text-white/70">
+      <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-10 lg:grid-cols-5">
+          <div className="col-span-2">
+            <span className="relative block h-9 w-[156px]">
+              <Image src="/zyncmart_logo.png" alt="Zyncmart" fill sizes="160px" className="object-cover" />
+            </span>
+            <p className="mt-3 max-w-xs text-sm leading-relaxed">Jewellery, toys and home accessories, delivered across India.</p>
+            <ul className="mt-5 space-y-2">
+              {ASSURANCES.map(({ icon: Icon, text, href }) => (
+                <li key={text} className="flex items-center gap-2 text-sm">
+                  <Icon className="h-4 w-4 shrink-0 text-white/60" aria-hidden="true" />
+                  {href ? (
+                    <Link href={href} className="hover:text-white hover:underline">
+                      {text}
+                    </Link>
+                  ) : (
+                    text
+                  )}
+                </li>
+              ))}
+            </ul>
             {whatsappNumber && (
               <a
-                href={`https://wa.me/${whatsappNumber}?text=Hi, I need help with my order`}
+                href={`https://wa.me/${whatsappNumber}?text=${encodeURIComponent('Hi, I need help with my order')}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 mt-4 text-sm text-green-400 hover:text-green-300 transition-colors"
+                className="mt-5 inline-flex h-10 items-center rounded-lg border border-white/20 px-4 text-sm font-medium text-white hover:bg-white/10"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                  className="w-4 h-4"
-                  aria-hidden="true"
-                >
-                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" />
-                  <path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.115 1.524 5.843L.057 23.929l6.236-1.635A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.012-1.374l-.36-.214-3.7.97.987-3.608-.234-.372A9.818 9.818 0 012.182 12C2.182 6.565 6.565 2.182 12 2.182S21.818 6.565 21.818 12 17.435 21.818 12 21.818z" />
-                </svg>
-                WhatsApp Support
+                WhatsApp support
+                <span className="sr-only"> (opens in a new tab)</span>
               </a>
             )}
           </div>
 
-          {/* Shop */}
-          <div>
-            <p className="text-white/90 font-semibold mb-3">Shop</p>
-            <ul className="space-y-2">
-              {SHOP_LINKS.map((link) => (
-                <li key={link.href}>
-                  <Link
-                    href={link.href}
-                    className="text-sm hover:text-white transition-colors"
-                  >
-                    {link.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
+          <Column title="Shop">
+            <li>
+              <Link href="/products" className={LINK}>
+                All products
+              </Link>
+            </li>
+            <FooterCategoryLinks linkClassName={LINK} />
+          </Column>
 
-          {/* Account */}
-          <div>
-            <p className="text-white/90 font-semibold mb-3">Account</p>
-            <ul className="space-y-2">
-              {ACCOUNT_LINKS.map((link) => (
-                <li key={link.href}>
-                  <Link
-                    href={link.href}
-                    className="text-sm hover:text-white transition-colors"
-                  >
-                    {link.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
+          <Column title="Account">
+            {ACCOUNT_LINKS.map((link) => (
+              <li key={link.href}>
+                <Link href={link.href} className={LINK}>
+                  {link.label}
+                </Link>
+              </li>
+            ))}
+          </Column>
 
-          {/* Company */}
-          <div>
-            <p className="text-white/90 font-semibold mb-3">Company</p>
-            <ul className="space-y-2">
-              {COMPANY_LINKS.map((link) => (
-                <li key={link.href}>
-                  <Link
-                    href={link.href}
-                    className="text-sm hover:text-white transition-colors"
-                  >
-                    {link.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
+          <Column title="Help">
+            {HELP_LINKS.map((link) => (
+              <li key={link.href}>
+                <Link href={link.href} className={LINK}>
+                  {link.label}
+                </Link>
+              </li>
+            ))}
+          </Column>
         </div>
 
-        <div className="border-t border-white/10 mt-10 pt-6 text-sm text-center text-white/40">
+        <div className="mt-10 border-t border-white/10 pt-6 text-sm text-white/60">
           © {new Date().getFullYear()} {siteName}. All rights reserved.
         </div>
       </div>

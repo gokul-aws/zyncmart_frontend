@@ -5,7 +5,9 @@ import Image from 'next/image';
 import { Trash2, Pencil, Eye, ToggleLeft, ToggleRight } from 'lucide-react';
 import Badge from '@/components/ui/Badge';
 import type { Product } from '@/types/product';
-import { cn, truncate } from '@/lib/utils';
+import { truncate } from '@/lib/utils';
+import { formatPrice, formatDate } from '@/lib/formatters';
+import { AdminTableCard, TABLE, THEAD, TH, TBODY, TR, TD } from '@/components/admin/AdminTable';
 
 interface AdminProductTableProps {
   products: Product[];
@@ -16,153 +18,88 @@ interface AdminProductTableProps {
   onToggleStatus: (product: Product) => void;
 }
 
-export default function AdminProductTable({
-  products,
-  selectedIds,
-  onToggleRow,
-  onToggleAll,
-  onDeleteRow,
-  onToggleStatus,
-}: AdminProductTableProps) {
+const ACTION = 'inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground';
+
+export default function AdminProductTable({ products, selectedIds, onToggleRow, onToggleAll, onDeleteRow, onToggleStatus }: AdminProductTableProps) {
   const allSelected = products.length > 0 && selectedIds.length === products.length;
 
   return (
-    <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
-      <table className="min-w-full table-auto text-left">
-        <thead className="bg-slate-100 text-slate-600 dark:bg-slate-950 dark:text-slate-300">
+    <AdminTableCard>
+      <table className={TABLE}>
+        <thead className={THEAD}>
           <tr>
-            <th className="px-4 py-4 w-12">
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  onChange={(event) => onToggleAll(event.target.checked)}
-                  className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
-                />
-              </label>
+            <th scope="col" className={`${TH} w-12`}>
+              <input type="checkbox" checked={allSelected} onChange={(event) => onToggleAll(event.target.checked)} aria-label="Select all products" className="h-4 w-4 accent-primary" />
             </th>
-            <th className="px-4 py-4">Product</th>
-            <th className="px-4 py-4">Category</th>
-            <th className="px-4 py-4">Price</th>
-            <th className="px-4 py-4">Stock</th>
-            <th className="px-4 py-4">Status</th>
-            <th className="px-4 py-4">Added</th>
-            <th className="px-4 py-4 text-right">Actions</th>
+            <th scope="col" className={TH}>Product</th>
+            <th scope="col" className={TH}>Category</th>
+            <th scope="col" className={`${TH} text-right`}>Price</th>
+            <th scope="col" className={`${TH} text-right`}>Stock</th>
+            <th scope="col" className={TH}>Status</th>
+            <th scope="col" className={TH}>Added</th>
+            <th scope="col" className={`${TH} text-right`}>Actions</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+        <tbody className={TBODY}>
           {products.map((product) => {
             const isSelected = selectedIds.includes(product._id);
             // Get primary image from variants or product images
-            const firstVariant = product.variants?.[0];
-            const variantImage = firstVariant?.images?.find((img) => img.isPrimary)
-              ?? firstVariant?.images?.[0]
-              ?? (firstVariant?.image ? { url: firstVariant.image, publicId: '', isPrimary: true } : null);
-            const primaryImage =
-              product.images.find((image) => image.isPrimary) ??
-              product.images[0];
-            const displayImage = variantImage ?? primaryImage;
+            const variantImage = product.variants?.[0]?.image;
+            const primaryImage = product.images.find((image) => image.isPrimary) ?? product.images[0];
+            const displayImage = variantImage ? { url: variantImage, publicId: '', isPrimary: true } : primaryImage;
             const isVariable = product.productType === 'variable';
-            const displayPrice = isVariable
-              ? (product.variants?.[0]?.price ?? product.price)
-              : product.price;
-            const displaySku = isVariable
-              ? (product.variants?.[0]?.sku ?? product.sku)
-              : product.sku;
+            const displayPrice = isVariable ? (product.variants?.[0]?.price ?? product.price) : product.price;
+            const displaySku = isVariable ? (product.variants?.[0]?.sku ?? product.sku) : product.sku;
+            const lowStock = product.stock <= (product.lowStockThreshold ?? 5);
 
             return (
-              <tr key={product._id} className={cn(isSelected ? 'bg-slate-50 dark:bg-slate-800' : '')}>
-                <td className="px-4 py-4">
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={() => onToggleRow(product._id)}
-                      className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
-                    />
-                  </label>
+              <tr key={product._id} className={isSelected ? 'bg-primary-subtle/50' : TR}>
+                <td className={TD}>
+                  <input type="checkbox" checked={isSelected} onChange={() => onToggleRow(product._id)} aria-label={`Select ${product.name}`} className="h-4 w-4 accent-primary" />
                 </td>
-                <td className="px-4 py-4">
-                  <div className="flex items-center gap-3">
-                    <div className="relative h-14 w-14 overflow-hidden rounded-2xl bg-slate-100">
+                <td className={TD}>
+                  <div className="flex min-w-[16rem] items-center gap-3">
+                    <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-surface-muted">
                       {displayImage ? (
-                        <Image
-                          src={displayImage.url}
-                          alt={product.name}
-                          fill
-                          className="object-cover"
-                          sizes="56px"
-                        />
+                        <Image src={displayImage.url} alt="" fill sizes="48px" className="object-cover" />
                       ) : (
-                        <div className="flex h-full w-full items-center justify-center text-slate-400 text-xs">
-                          No image
-                        </div>
+                        <span className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">No image</span>
                       )}
                     </div>
-                    <div>
-                      <Link href={`/admin/products/${product.slug}`} className="font-semibold text-slate-900 hover:text-primary dark:text-white dark:hover:text-primary">
+                    <div className="min-w-0">
+                      <Link href={`/admin/products/${product.slug}`} className="font-medium text-foreground hover:text-primary hover:underline">
                         {product.name}
                       </Link>
-                      <p className="text-sm text-slate-500 dark:text-slate-400">{truncate(displaySku, 32)}</p>
-                      <Badge variant={isVariable ? 'outline' : 'success'} className="mt-1 text-[10px]">
-                        {isVariable ? 'Variable' : 'Simple'}
-                      </Badge>
+                      <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                        {truncate(displaySku ?? '', 32)}
+                        <Badge variant="neutral">{isVariable ? 'Variable' : 'Simple'}</Badge>
+                      </p>
                     </div>
                   </div>
                 </td>
-                <td className="px-4 py-4 text-sm text-slate-600 dark:text-slate-300">{product.category.name}</td>
-                <td className="px-4 py-4 text-sm text-slate-600 dark:text-slate-300">
-                  ₹{(displayPrice ?? 0).toLocaleString()}
-                  {isVariable && product.variants?.length > 1 && (
-                    <span className="ml-1 text-xs text-slate-400">({product.variants.length} variants)</span>
-                  )}
+                <td className={`${TD} whitespace-nowrap text-muted-foreground`}>{product.category?.name}</td>
+                <td className={`${TD} whitespace-nowrap text-right tabular-nums`}>
+                  {isVariable && product.variants?.length > 1 && <span className="text-muted-foreground">From </span>}
+                  {formatPrice(displayPrice ?? 0)}
+                  {isVariable && product.variants?.length > 1 && <p className="text-xs text-muted-foreground">{product.variants.length} variants</p>}
                 </td>
-                <td className="px-4 py-4 text-sm text-slate-600 dark:text-slate-300">{product.stock}</td>
-                <td className="px-4 py-4">
-                  <Badge variant={product.isActive ? 'success' : 'outline'}>
-                    {product.isActive ? 'Active' : 'Inactive'}
-                  </Badge>
+                <td className={`${TD} text-right tabular-nums ${product.stock === 0 ? 'font-semibold text-error' : lowStock ? 'font-semibold text-warning' : ''}`}>{product.stock}</td>
+                <td className={TD}>
+                  <Badge variant={product.isActive ? 'success' : 'neutral'}>{product.isActive ? 'Active' : 'Inactive'}</Badge>
                 </td>
-                <td className="px-4 py-4 text-sm text-slate-600 dark:text-slate-300">
-                  {new Date(product.createdAt).toLocaleDateString('en-IN', {
-                    day: 'numeric',
-                    month: 'short',
-                    year: 'numeric',
-                  })}
-                </td>
-                <td className="px-4 py-4 text-right space-x-2 whitespace-nowrap">
-                  <button
-                    type="button"
-                    onClick={() => onToggleStatus(product)}
-                    className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-slate-600 hover:border-slate-300 hover:bg-slate-100 transition-colors dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-900"
-                    aria-label={product.isActive ? 'Deactivate product' : 'Activate product'}
-                  >
-                    {product.isActive ? <ToggleRight className="h-4 w-4" /> : <ToggleLeft className="h-4 w-4" />}
+                <td className={`${TD} whitespace-nowrap text-muted-foreground`}>{formatDate(product.createdAt)}</td>
+                <td className={`${TD} whitespace-nowrap text-right`}>
+                  <button type="button" onClick={() => onToggleStatus(product)} className={ACTION} aria-label={`${product.isActive ? 'Deactivate' : 'Activate'} ${product.name}`} title={product.isActive ? 'Deactivate' : 'Activate'}>
+                    {product.isActive ? <ToggleRight className="h-4 w-4" aria-hidden="true" /> : <ToggleLeft className="h-4 w-4" aria-hidden="true" />}
                   </button>
-
-                  <Link
-                    href={`/admin/products/${product.slug}/edit`}
-                    className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-slate-600 hover:border-slate-300 hover:bg-slate-100 transition-colors dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-900"
-                    aria-label="Edit product"
-                  >
-                    <Pencil className="h-4 w-4" />
+                  <Link href={`/admin/products/${product.slug}/edit`} className={ACTION} aria-label={`Edit ${product.name}`} title="Edit">
+                    <Pencil className="h-4 w-4" aria-hidden="true" />
                   </Link>
-
-                  <Link
-                    href={`/admin/products/${product.slug}`}
-                    className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-slate-600 hover:border-slate-300 hover:bg-slate-100 transition-colors dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-900"
-                    aria-label="View product"
-                  >
-                    <Eye className="h-4 w-4" />
+                  <Link href={`/admin/products/${product.slug}`} className={ACTION} aria-label={`View ${product.name}`} title="View">
+                    <Eye className="h-4 w-4" aria-hidden="true" />
                   </Link>
-
-                  <button
-                    type="button"
-                    onClick={() => onDeleteRow(product)}
-                    className="inline-flex items-center justify-center rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 text-rose-700 hover:bg-rose-100 transition-colors dark:border-rose-600/40 dark:bg-rose-950/20 dark:text-rose-200 dark:hover:bg-rose-900"
-                    aria-label="Delete product"
-                  >
-                    <Trash2 className="h-4 w-4" />
+                  <button type="button" onClick={() => onDeleteRow(product)} className={`${ACTION} hover:bg-error-subtle hover:text-error`} aria-label={`Delete ${product.name}`} title="Delete">
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
                   </button>
                 </td>
               </tr>
@@ -170,6 +107,6 @@ export default function AdminProductTable({
           })}
         </tbody>
       </table>
-    </div>
+    </AdminTableCard>
   );
 }

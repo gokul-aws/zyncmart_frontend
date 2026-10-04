@@ -1,15 +1,17 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { CheckCircle2 } from 'lucide-react';
+import { Check, ChevronDown } from 'lucide-react';
+import { formatPrice } from '@/lib/formatters';
+import { cn } from '@/lib/utils';
 import { useCartStore } from '@/lib/store/cartStore';
-import { useBuyNowStore } from '@/lib/store/buyNowStore';
 import { useAuthStore } from '@/lib/store/authStore';
 import { useRazorpay } from '@/hooks/useRazorpay';
-import { useSubmitGuard } from '@/hooks/useSubmitGuard';
-import { createOrder, cartItemsToOrderItems } from '@/lib/api/orders';
+import { createOrder, fetchOrderQuote, getApiError } from '@/lib/api/orders';
+import { validatePincode } from '@/lib/shipping';
 import { GA } from '@/lib/analytics';
 import AddressStep from './AddressStep';
 import PaymentStep from './PaymentStep';
@@ -19,53 +21,51 @@ import type { Address } from '@/types/user';
 type Step = 'address' | 'payment';
 
 const STEP_LABELS: Record<Step, string> = {
-  address: 'Delivery Address',
+  address: 'Delivery address',
   payment: 'Payment',
 };
 
 const STEPS: Step[] = ['address', 'payment'];
 
-export interface CheckoutShipping {
+export interface CheckoutDestination {
   pincode: string;
   state: string;
-  shippingCharge: number;
 }
+
+// Codes for which the server's cart differs from what the customer reviewed:
+// reload the cart so they see the corrected items before trying again.
+const CART_RELOAD_CODES = new Set(['CART_CHANGED', 'COUPON_INVALID', 'OUT_OF_STOCK', 'CART_EMPTY']);
 
 export default function CheckoutClient() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const isBuyNow = searchParams.get('buyNow') === 'true';
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
-  const cartItems = useCartStore((s) => s.items);
-  const cartGetSummary = useCartStore((s) => s.getSummary);
-  const cartClear = useCartStore((s) => s.clearCart);
-  const cartLoad = useCartStore((s) => s.loadCart);
-  const buyNowItems = useBuyNowStore((s) => s.items);
-  const buyNowGetSummary = useBuyNowStore((s) => s.getSummary);
-  const buyNowClear = useBuyNowStore((s) => s.clear);
-
-  const items = isBuyNow ? buyNowItems : cartItems;
-  const getSummary = isBuyNow ? buyNowGetSummary : cartGetSummary;
-  const clearCheckoutItems = isBuyNow ? buyNowClear : cartClear;
+  // Checkout always uses the server-side cart: the server builds the order from
+  // it, so the UI must show exactly those items.
+  const items = useCartStore((s) => s.items);
+  const loadCart = useCartStore((s) => s.loadCart);
+  const clearCart = useCartStore((s) => s.clearCart);
   const { initiatePayment } = useRazorpay();
-  const guard = useSubmitGuard();
 
   const [currentStep, setCurrentStep] = useState<Step>('address');
   const [shippingAddress, setShippingAddress] = useState<Address | null>(null);
-  const [checkoutShipping, setCheckoutShipping] = useState<CheckoutShipping>({
-    pincode: '',
-    state: '',
-    shippingCharge: 0,
+  const [destination, setDestination] = useState<CheckoutDestination>({ pincode: '', state: '' });
+
+  // Every amount shown at checkout comes from the server quote. It is
+  // re-requested when the delivery state/pincode or the cart contents change.
+  const cartKey = useMemo(() => items.map((i) => `${i._id}:${i.quantity}`).join('|'), [items]);
+  const canQuote = validatePincode(destination.pincode) && Boolean(destination.state) && items.length > 0;
+  const quoteQuery = useQuery({
+    queryKey: ['order-quote', destination.state, destination.pincode, cartKey],
+    queryFn: () => fetchOrderQuote(destination),
+    enabled: canQuote,
+    staleTime: 0,
+    retry: false,
   });
-  // Set once a Razorpay order has been created for this checkout attempt.
-  // Retrying after a dismissed/failed payment reuses it (POST /payments/create-order
-  // is idempotent per order) instead of placing a brand-new order — otherwise
-  // every retry click would deduct stock again for an order that never gets paid.
-  const [pendingRazorpayOrder, setPendingRazorpayOrder] = useState<{
-    _id: string;
-    orderNumber: string;
-  } | null>(null);
+  const quote = canQuote ? quoteQuery.data ?? null : null;
+  const quoteError = canQuote && quoteQuery.isError
+    ? getApiError(quoteQuery.error, 'Could not calculate the total for this address.').message
+    : null;
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -76,151 +76,128 @@ export default function CheckoutClient() {
       router.replace('/cart');
       return;
     }
-    // Re-sync against live product data (price/stock may have changed since
-    // it was added) — surfaces as the same toasts the cart page shows, so a
-    // stale price/quantity is caught before payment rather than only at the
-    // final createOrder rejection. Buy Now's single item is already fresh
-    // from the product page moments ago, so there's nothing to refresh.
-    if (!isBuyNow) {
-      cartLoad().catch(() => {});
-    }
     GA.beginCheckout(items);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const { subtotal, discount, coupon } = getSummary();
-  const shipping = checkoutShipping.shippingCharge;
-  const total = Math.max(0, subtotal - discount + shipping);
-  const pricing = { subtotal, discount, shipping, tax: 0, total };
-
   const handleAddressContinue = (address: Address) => {
     setShippingAddress(address);
+    setDestination({ pincode: address.pincode, state: address.state });
     setCurrentStep('payment');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Guarded against a fast double-click/double-submit firing this twice
-  // before React re-renders the disabled button — same pattern used for the
-  // auth forms (see useSubmitGuard). Without it, COD in particular could
-  // create two real orders from one double-click (Razorpay's own modal
-  // naturally prevents a second charge, but COD has no such gate).
-  const handlePlaceOrder = (paymentMethod: 'razorpay' | 'cod') => guard(async () => {
+  const handlePlaceOrder = async (paymentMethod: 'razorpay' | 'cod') => {
     if (!shippingAddress) return;
 
     let order;
-    if (paymentMethod === 'razorpay' && pendingRazorpayOrder) {
-      order = pendingRazorpayOrder;
-    } else {
-      try {
-        order = await createOrder({
-          items: cartItemsToOrderItems(items),
-          shippingAddress,
-          paymentMethod,
-          pricing,
-          couponCode: coupon ?? undefined,
-        });
-      } catch {
-        toast.error('Failed to place order. Please try again.');
-        return;
+    try {
+      order = await createOrder({ shippingAddress, paymentMethod });
+    } catch (err) {
+      const { code, message } = getApiError(err, 'Failed to place order. Please try again.');
+      toast.error(message);
+      if (code && CART_RELOAD_CODES.has(code)) {
+        await loadCart().catch(() => {});
+        await quoteQuery.refetch();
       }
-      if (paymentMethod === 'razorpay') {
-        setPendingRazorpayOrder({ _id: order._id, orderNumber: order.orderNumber });
-      }
+      return;
     }
 
     if (paymentMethod === 'cod') {
-      clearCheckoutItems();
+      // The server already emptied the cart; this syncs the local store.
+      clearCart().catch(() => {});
       router.push(`/checkout/success?orderId=${order._id}`);
       return;
     }
 
     try {
-      await initiatePayment(order._id, order.orderNumber, clearCheckoutItems, shippingAddress.phone);
+      await initiatePayment(order._id, order.orderNumber, () => clearCart().catch(() => {}), shippingAddress.phone);
     } catch {
-      // errors are toasted inside initiatePayment; order already created — the next
-      // "Pay" click retries this same order instead of placing a new one.
+      // errors are toasted inside initiatePayment; order already created
     }
-  });
+  };
 
   const currentStepIndex = STEPS.indexOf(currentStep);
 
   if (items.length === 0) return null;
 
+  const summaryProps = {
+    quote,
+    quoteLoading: canQuote && quoteQuery.isFetching,
+    quoteError,
+    detectedState: destination.state,
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-5xl mx-auto px-4 py-8">
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">Checkout</h1>
+    <div className="mx-auto max-w-6xl px-4 pb-16 pt-6 sm:px-6 lg:px-8">
+      <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Checkout</h1>
 
-        {/* Step indicator */}
-        <nav className="flex items-center gap-0 mb-8">
-          {STEPS.map((step, idx) => (
-            <div key={step} className="flex items-center">
-              <div className="flex items-center gap-2">
-                <div
-                  className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-semibold shrink-0 transition-colors ${
-                    idx < currentStepIndex
-                      ? 'bg-green-500 text-white'
-                      : idx === currentStepIndex
-                      ? 'bg-primary text-white'
-                      : 'bg-gray-200 text-gray-500'
-                  }`}
-                >
-                  {idx < currentStepIndex ? (
-                    <CheckCircle2 className="w-4 h-4" />
-                  ) : (
-                    idx + 1
-                  )}
-                </div>
-                <span
-                  className={`text-sm font-medium hidden sm:block ${
-                    idx === currentStepIndex ? 'text-gray-900' : 'text-gray-400'
-                  }`}
-                >
-                  {STEP_LABELS[step]}
-                </span>
-              </div>
-              {idx < STEPS.length - 1 && (
-                <div
-                  className={`h-px w-8 sm:w-12 mx-2 shrink-0 transition-colors ${
-                    idx < currentStepIndex ? 'bg-green-500' : 'bg-gray-200'
-                  }`}
-                />
-              )}
-            </div>
-          ))}
-        </nav>
+      {/* Step indicator */}
+      <ol className="mt-5 flex items-center gap-2 text-sm" aria-label="Checkout steps">
+        {STEPS.map((step, idx) => {
+          const done = idx < currentStepIndex;
+          const current = idx === currentStepIndex;
+          return (
+            <li key={step} className="flex items-center gap-2" aria-current={current ? 'step' : undefined}>
+              <span
+                className={cn(
+                  'flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-semibold',
+                  done ? 'bg-success text-white' : current ? 'bg-ink text-white' : 'bg-surface-muted text-muted-foreground'
+                )}
+              >
+                {done ? <Check className="h-4 w-4" aria-hidden="true" /> : idx + 1}
+              </span>
+              <span className={cn('font-medium', current ? 'text-foreground' : 'text-muted-foreground')}>
+                {STEP_LABELS[step]}
+                {done && <span className="sr-only"> (completed)</span>}
+              </span>
+              {idx < STEPS.length - 1 && <span className={cn('mx-1 h-px w-8 sm:w-12', done ? 'bg-success' : 'bg-border-strong')} aria-hidden="true" />}
+            </li>
+          );
+        })}
+      </ol>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2">
-            <div className="bg-white rounded-2xl shadow-sm p-6">
-              {currentStep === 'address' && (
-                <AddressStep
-                  onContinue={handleAddressContinue}
-                  onShippingChange={setCheckoutShipping}
-                  initialPincode={checkoutShipping.pincode}
-                  subtotal={subtotal}
-                />
-              )}
-              {currentStep === 'payment' && shippingAddress && (
-                <PaymentStep
-                  shippingAddress={shippingAddress}
-                  total={total}
-                  onBack={() => setCurrentStep('address')}
-                  onPlaceOrder={handlePlaceOrder}
-                />
-              )}
-            </div>
-          </div>
-
-          <div className="lg:col-span-1">
-            <div className="sticky top-6">
-              <OrderSummary
-                shippingCharge={checkoutShipping.shippingCharge}
-                detectedState={checkoutShipping.state}
-              />
-            </div>
-          </div>
+      {/* Mobile: order summary collapsed at the top, total always visible. */}
+      <details className="group mt-6 rounded-xl border border-border bg-surface lg:hidden">
+        <summary className="flex h-14 cursor-pointer list-none items-center justify-between gap-3 px-4 text-sm font-semibold text-foreground [&::-webkit-details-marker]:hidden">
+          <span className="flex items-center gap-2">
+            Order summary ({items.length} {items.length === 1 ? 'item' : 'items'})
+            <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" aria-hidden="true" />
+          </span>
+          <span className="tabular-nums">{quote ? formatPrice(quote.total) : ''}</span>
+        </summary>
+        <div className="border-t border-border px-4 pb-4">
+          <OrderSummary {...summaryProps} framed={false} />
         </div>
+      </details>
+
+      <div className="mt-6 grid grid-cols-1 gap-8 lg:grid-cols-[1fr_380px]">
+        <div className="rounded-xl border border-border bg-surface p-5 sm:p-6">
+          {currentStep === 'address' && (
+            <AddressStep
+              onContinue={handleAddressContinue}
+              onShippingChange={setDestination}
+              initialPincode={destination.pincode}
+              quotedShipping={quote?.shipping ?? null}
+            />
+          )}
+          {currentStep === 'payment' && shippingAddress && (
+            <PaymentStep
+              shippingAddress={shippingAddress}
+              quote={quote}
+              quoteLoading={summaryProps.quoteLoading}
+              quoteError={quoteError}
+              onBack={() => setCurrentStep('address')}
+              onPlaceOrder={handlePlaceOrder}
+            />
+          )}
+        </div>
+
+        <aside className="hidden lg:block" aria-label="Order summary">
+          <div className="sticky top-24">
+            <OrderSummary {...summaryProps} />
+          </div>
+        </aside>
       </div>
     </div>
   );

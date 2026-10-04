@@ -2,6 +2,7 @@ import type { Product, ProductFilters, ProductCreatePayload, ProductUpdatePayloa
 import type { PaginatedResponse, ApiResponse } from '@/types/api';
 import type { Review, CreateReviewPayload } from '@/types/review';
 import api from './axios';
+import { buildProductQuery } from '@/lib/productQuery';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -10,20 +11,11 @@ export async function fetchProducts(
 ): Promise<PaginatedResponse<Product>> {
   if (!BASE_URL) return { success: false, data: [], pagination: { page: 1, limit: 10, total: 0, pages: 0 } };
 
-  const params = new URLSearchParams();
-  (Object.keys(filters) as (keyof ProductFilters)[]).forEach((key) => {
-    const value = filters[key];
-    if (value !== undefined && value !== null) {
-      params.set(key, Array.isArray(value) ? value.join(',') : String(value));
-    }
-  });
+  const params = buildProductQuery(filters);
 
   const res = await fetch(
     `${BASE_URL}/products${params.toString() ? `?${params}` : ''}`,
-    // 1-hour ISR ceiling is a safety net, not the primary invalidation path —
-    // an admin create/update/delete calls revalidateTag('products') on
-    // success (see lib/actions/revalidate.ts) to bust this immediately.
-    filters.search ? { cache: 'no-store' } : { next: { revalidate: 3600, tags: ['products'] } }
+    filters.search ? { cache: 'no-store' } : { next: { revalidate: 3600 } }
   );
 
   if (!res.ok) throw new Error(`fetchProducts failed: ${res.status}`);
@@ -41,9 +33,7 @@ export const fetchBestSellers = () =>
 
 export async function fetchProduct(slug: string): Promise<Product> {
   const res = await fetch(`${BASE_URL}/products/${slug}`, {
-    // Tagged per-slug (not the shared 'products' tag) so updating one
-    // product's detail page doesn't bust every other product's cached PDP.
-    next: { revalidate: 3600, tags: [`product:${slug}`] },
+    next: { revalidate: 3600 },
   });
 
   if (!res.ok) throw new Error(`fetchProduct failed: ${res.status}`);

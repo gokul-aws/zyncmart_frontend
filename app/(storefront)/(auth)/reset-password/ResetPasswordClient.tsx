@@ -9,19 +9,17 @@ import { z } from 'zod';
 import { CheckCircle2 } from 'lucide-react';
 import { resetPassword } from '@/lib/api/auth';
 import { useApiValidation } from '@/hooks/useApiValidation';
-import { passwordSchema } from '@/lib/validation';
-import { useSubmitGuard } from '@/hooks/useSubmitGuard';
+import AuthCard from '@/components/auth/AuthCard';
+import Field from '@/components/ui/Field';
+import { Input } from '@/components/ui/Input';
+import PasswordInput from '@/components/ui/PasswordInput';
+import Button, { buttonClasses } from '@/components/ui/Button';
+import Alert from '@/components/ui/Alert';
 
-// The backend's reset-password flow is OTP-based (a 6-digit code emailed by
-// POST /auth/forgot-password), not a token link, so this page collects the
-// same email + otp + password used by /auth/reset-password. It isn't linked
-// to from the app (the /forgot-password page handles the flow end-to-end
-// inline) but is kept working for direct navigation.
 const schema = z
   .object({
-    email: z.string().email('Enter a valid email'),
-    otp: z.string().regex(/^\d{6}$/, 'Enter the 6-digit code'),
-    password: passwordSchema,
+    token: z.string().min(1, 'Token is required'),
+    password: z.string().min(8, 'Password must be at least 8 characters'),
     confirmPassword: z.string().min(1, 'Please confirm your password'),
   })
   .refine((d) => d.password === d.confirmPassword, {
@@ -34,10 +32,8 @@ type FormData = z.infer<typeof schema>;
 export default function ResetPasswordClient() {
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
-  const guard = useSubmitGuard();
   const searchParams = useSearchParams();
-  const urlEmail = searchParams?.get('email') ?? '';
-  const urlOtp = searchParams?.get('otp') ?? '';
+  const urlToken = searchParams?.get('token') ?? '';
 
   const { apiErrors, generalError, handleApiError, clearErrors, clearFieldError } = useApiValidation<FormData>();
 
@@ -48,156 +44,78 @@ export default function ResetPasswordClient() {
   } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
-      email: urlEmail,
-      otp: urlOtp,
+      token: urlToken,
       password: '',
       confirmPassword: '',
     },
   });
 
-  const onSubmit = (data: FormData) => guard(async () => {
+  const onSubmit = async (data: FormData) => {
     setLoading(true);
     clearErrors();
     try {
-      await resetPassword(data.email, data.otp, data.password);
+      await resetPassword(data.token, data.password, data.confirmPassword);
       setSuccess(true);
     } catch (err) {
-      // Invalid/expired codes come back as a generic 400 from the backend
-      // (it never reveals whether the email or the code was the problem).
       handleApiError(err);
     } finally {
       setLoading(false);
     }
-  });
+  };
+
+  const apiError = (field: keyof FormData) => apiErrors?.[field]?.join(' ');
+
+  if (success) {
+    return (
+      <AuthCard title="Password updated" description="Your password has been reset. You can now sign in with your new password.">
+        <div className="mb-6 flex justify-center">
+          <CheckCircle2 className="h-12 w-12 text-success" aria-hidden="true" />
+        </div>
+        <Link href="/login" className={buttonClasses({ size: 'lg', fullWidth: true })}>
+          Sign in
+        </Link>
+      </AuthCard>
+    );
+  }
 
   return (
-    <div className="min-h-[80vh] flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-          {success ? (
-            <div className="text-center">
-              <CheckCircle2 className="w-12 h-12 text-success mx-auto mb-3" />
-              <h2 className="text-xl font-bold text-gray-900 mb-2">Password Reset Successful</h2>
-              <p className="text-sm text-gray-500 mb-6">
-                Your password has been reset successfully. You can now log in with your new password.
-              </p>
-              <Link
-                href="/login"
-                className="inline-block w-full py-3 bg-primary text-white font-semibold rounded-xl text-center hover:bg-primary-dark transition-colors text-sm"
-              >
-                Sign In
-              </Link>
-            </div>
-          ) : (
-            <>
-              <h1 className="text-2xl font-bold text-gray-900 mb-1">Reset password</h1>
-              <p className="text-sm text-gray-500 mb-6">
-                Enter the 6-digit code we emailed you along with your new password.
-              </p>
+    <AuthCard
+      title="Reset password"
+      description="Enter your new password below."
+      footer={
+        <Link href="/login" className="font-semibold text-primary hover:underline">
+          Back to sign in
+        </Link>
+      }
+    >
+      {generalError && (
+        <Alert variant="error" live className="mb-5">
+          {generalError}
+        </Alert>
+      )}
 
-              {generalError && (
-                <div className="mb-4 px-4 py-3 bg-red-50 border border-red-100 rounded-lg text-sm text-error">
-                  {generalError}
-                </div>
-              )}
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
+        {/* Token field only when it isn't in the URL. */}
+        {!urlToken ? (
+          <Field label="Reset token" error={errors.token?.message ?? apiError('token')} hint="From your password reset email">
+            <Input {...register('token', { onChange: () => clearFieldError('token') })} type="text" />
+          </Field>
+        ) : (
+          <input type="hidden" {...register('token')} />
+        )}
 
-              <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
-                <div>
-                  <label htmlFor="rp-email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                  <input
-                    {...register('email', { onChange: () => clearFieldError('email') })}
-                    id="rp-email"
-                    type="email"
-                    autoComplete="email"
-                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                    placeholder="you@example.com"
-                  />
-                  {errors.email && <p className="mt-1 text-xs text-error">{errors.email.message}</p>}
-                  {!errors.email && apiErrors?.email?.map((msg, i) => (
-                    <p key={i} className="mt-1 text-xs text-error">{msg}</p>
-                  ))}
-                </div>
+        <Field label="New password" error={errors.password?.message ?? apiError('password')} hint="At least 8 characters">
+          <PasswordInput {...register('password', { onChange: () => clearFieldError('password') })} autoComplete="new-password" />
+        </Field>
 
-                <div>
-                  <label htmlFor="rp-otp" className="block text-sm font-medium text-gray-700 mb-1">Verification code</label>
-                  <input
-                    {...register('otp', { onChange: () => clearFieldError('otp') })}
-                    id="rp-otp"
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={6}
-                    autoComplete="one-time-code"
-                    placeholder="123456"
-                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm tracking-[0.3em] text-center focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                  />
-                  {errors.otp && <p className="mt-1 text-xs text-error">{errors.otp.message}</p>}
-                  {!errors.otp && apiErrors?.otp?.map((msg, i) => (
-                    <p key={i} className="mt-1 text-xs text-error">{msg}</p>
-                  ))}
-                </div>
+        <Field label="Confirm new password" error={errors.confirmPassword?.message ?? apiError('confirmPassword')}>
+          <PasswordInput {...register('confirmPassword', { onChange: () => clearFieldError('confirmPassword') })} autoComplete="new-password" />
+        </Field>
 
-                <div>
-                  <label htmlFor="rp-password" className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
-                  <input
-                    {...register('password', { onChange: () => clearFieldError('password') })}
-                    id="rp-password"
-                    type="password"
-                    autoComplete="new-password"
-                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                    placeholder="••••••••"
-                  />
-                  {errors.password ? (
-                    <p className="mt-1 text-xs text-error">{errors.password.message}</p>
-                  ) : (
-                    <p className="mt-1 text-xs text-gray-400">
-                      At least 8 characters, with uppercase, lowercase, a number, and a special character.
-                    </p>
-                  )}
-                  {!errors.password && apiErrors?.password?.map((msg, i) => (
-                    <p key={i} className="mt-1 text-xs text-error">{msg}</p>
-                  ))}
-                </div>
-
-                <div>
-                  <label htmlFor="rp-confirm-password" className="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
-                  <input
-                    {...register('confirmPassword', { onChange: () => clearFieldError('confirmPassword') })}
-                    id="rp-confirm-password"
-                    type="password"
-                    autoComplete="new-password"
-                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                    placeholder="••••••••"
-                  />
-                  {errors.confirmPassword && (
-                    <p className="mt-1 text-xs text-error">{errors.confirmPassword.message}</p>
-                  )}
-                  {!errors.confirmPassword && apiErrors?.confirmPassword?.map((msg, i) => (
-                    <p key={i} className="mt-1 text-xs text-error">{msg}</p>
-                  ))}
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full py-3 bg-primary text-white font-semibold rounded-xl hover:bg-primary-dark transition-colors disabled:opacity-60 disabled:cursor-not-allowed text-sm"
-                >
-                  {loading ? 'Resetting…' : 'Reset Password'}
-                </button>
-              </form>
-
-              <div className="mt-6 text-center text-sm text-gray-500">
-                <Link href="/forgot-password" className="font-medium text-primary hover:underline">
-                  Request a new code
-                </Link>
-                <span className="mx-2">·</span>
-                <Link href="/login" className="font-medium text-primary hover:underline">
-                  Back to Login
-                </Link>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
+        <Button type="submit" size="lg" fullWidth loading={loading}>
+          {loading ? 'Resetting…' : 'Reset password'}
+        </Button>
+      </form>
+    </AuthCard>
   );
 }

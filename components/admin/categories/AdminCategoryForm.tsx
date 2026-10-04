@@ -96,9 +96,9 @@ export default function AdminCategoryForm({ initialData, categories = [] }: Admi
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       {/* Category Image */}
       <div>
-        <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">
+        <p className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">
           Category Image
-        </label>
+        </p>
         {imagePreview ? (
           <div className="relative w-40 h-40 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 group">
             <Image
@@ -117,7 +117,7 @@ export default function AdminCategoryForm({ initialData, categories = [] }: Admi
           </div>
         ) : (
           <label className="flex flex-col items-center justify-center w-40 h-40 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 cursor-pointer hover:border-primary transition-colors bg-slate-50 dark:bg-slate-800">
-            <Upload className="h-6 w-6 text-slate-400 mb-2" />
+            <Upload className="h-6 w-6 text-subtle-foreground mb-2" />
             <span className="text-xs text-slate-500 dark:text-slate-400">Upload image</span>
             <input
               ref={fileInputRef}
@@ -135,38 +135,38 @@ export default function AdminCategoryForm({ initialData, categories = [] }: Admi
 
       {/* Name */}
       <div>
-        <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">
+        <label htmlFor="fld-admincategoryform-name" className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">
           Category Name *
         </label>
-        <input
+        <input id="fld-admincategoryform-name"
           {...register('name')}
           type="text"
           className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-slate-800 dark:border-slate-600"
           placeholder="e.g., Jewellery"
         />
-        {errors.name && <p className="mt-1 text-xs text-rose-500">{errors.name.message}</p>}
+        {errors.name && <p className="mt-1 text-xs text-error">{errors.name.message}</p>}
       </div>
 
       {/* Description */}
       <div>
-        <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">
+        <label htmlFor="fld-admincategoryform-description" className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">
           Description
         </label>
-        <textarea
+        <textarea id="fld-admincategoryform-description"
           {...register('description')}
           rows={4}
           className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-slate-800 dark:border-slate-600"
           placeholder="Enter category description"
         />
-        {errors.description && <p className="mt-1 text-xs text-rose-500">{errors.description.message}</p>}
+        {errors.description && <p className="mt-1 text-xs text-error">{errors.description.message}</p>}
       </div>
 
       {/* Parent Category */}
       <div>
-        <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">
+        <label htmlFor="fld-admincategoryform-parentId" className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">
           Parent Category
         </label>
-        <select
+        <select id="fld-admincategoryform-parentId"
           {...register('parentId')}
           className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-slate-800 dark:border-slate-600"
         >
@@ -183,17 +183,17 @@ export default function AdminCategoryForm({ initialData, categories = [] }: Admi
 
       {/* Sort Order */}
       <div>
-        <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">
+        <label htmlFor="fld-admincategoryform-sortOrder" className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">
           Sort Order
         </label>
-        <input
+        <input id="fld-admincategoryform-sortOrder"
           {...register('sortOrder', { valueAsNumber: true })}
           type="number"
           min="0"
           className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-slate-800 dark:border-slate-600"
           placeholder="1"
         />
-        {errors.sortOrder && <p className="mt-1 text-xs text-rose-500">{errors.sortOrder.message}</p>}
+        {errors.sortOrder && <p className="mt-1 text-xs text-error">{errors.sortOrder.message}</p>}
       </div>
 
       <div className="flex gap-4 pt-4">

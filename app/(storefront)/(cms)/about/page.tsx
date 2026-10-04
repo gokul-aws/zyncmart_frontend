@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 
 const SITE_NAME = process.env.NEXT_PUBLIC_SITE_NAME ?? 'Store';
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? '';
@@ -37,15 +38,15 @@ export default function AboutPage() {
         <ul className="list-disc list-inside space-y-2">
           <li>Carefully curated, quality-verified products</li>
           <li>Free shipping on orders above ₹999</li>
-          <li>Easy 7-day returns and exchanges</li>
-          <li>Cash on Delivery available across India</li>
+          <li>7-day returns on eligible items (<Link href="/policies/returns" className="text-primary hover:underline">returns policy</Link>)</li>
+          <li>Cash on delivery on orders up to ₹10,000</li>
           <li>Dedicated customer support via WhatsApp</li>
         </ul>
 
         <h2 className="text-xl font-semibold text-gray-900 mt-8">Get in Touch</h2>
         <p>
           Have questions? We&apos;d love to hear from you.{' '}
-          <a href="/contact" className="text-primary hover:underline">Contact us</a> or reach
+          <Link href="/contact" className="text-primary hover:underline">Contact us</Link> or reach
           us directly on WhatsApp for the fastest response.
         </p>
       </div>

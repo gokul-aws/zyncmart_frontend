@@ -9,13 +9,10 @@ export const metadata: Metadata = {
 export default function AccountLayout({ children }: { children: React.ReactNode }) {
   return (
     <AuthGuard>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Mobile: simple top nav tabs are rendered inside each page; sidebar is desktop-only */}
-        <div className="flex gap-8 items-start">
-          <div className="hidden lg:block">
-            <AccountSidebar />
-          </div>
-          <div className="flex-1 min-w-0">{children}</div>
+      <div className="mx-auto max-w-7xl px-4 pb-16 pt-6 sm:px-6 lg:px-8 lg:pt-10">
+        <div className="lg:flex lg:items-start lg:gap-10">
+          <AccountSidebar />
+          <div className="min-w-0 flex-1">{children}</div>
         </div>
       </div>
     </AuthGuard>

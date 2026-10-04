@@ -80,7 +80,9 @@ const POLICIES: Record<PolicySlug, { title: string; content: React.ReactNode }> 
       <div className="space-y-6 text-gray-700 leading-relaxed">
         <p>Last updated: January 2025</p>
         <h2 className="text-lg font-semibold text-gray-900">Free Shipping</h2>
-        <p>We offer free shipping on all orders above ₹999. A flat shipping fee of ₹99 applies to orders below this threshold.</p>
+        <p>Shipping is free when your order value after any coupon discount is ₹999 or more.</p>
+        <p>Below that, shipping costs ₹40 for delivery within Tamil Nadu and ₹60 for delivery to any other state or union territory in India. The exact charge is shown at checkout once you enter your delivery address.</p>
+        <p>All prices include GST. Cash on Delivery is available, at no extra charge, for orders up to ₹10,000.</p>
         <h2 className="text-lg font-semibold text-gray-900">Delivery Timelines</h2>
         <ul className="list-disc list-inside space-y-1">
           <li>Metro cities: 3–5 business days</li>

@@ -1,35 +1,48 @@
 'use client';
 
 import { useState } from 'react';
-import { CreditCard, Truck, ChevronLeft, Loader2, ShieldCheck } from 'lucide-react';
+import { CreditCard, Truck, ChevronLeft, ShieldCheck, Smartphone } from 'lucide-react';
+import { RadioCard } from '@/components/ui/Input';
+import Button from '@/components/ui/Button';
+import Alert from '@/components/ui/Alert';
 import type { Address } from '@/types/user';
+import type { OrderQuote } from '@/types/order';
 import { formatPrice } from '@/lib/formatters';
-
-const COD_LIMIT = 10000;
 
 interface PaymentStepProps {
   shippingAddress: Address;
-  total: number;
+  /** Server quote — the only source of the payable total and COD availability. */
+  quote: OrderQuote | null;
+  quoteLoading?: boolean;
+  quoteError?: string | null;
   onBack: () => void;
   onPlaceOrder: (paymentMethod: 'razorpay' | 'cod') => Promise<void>;
 }
 
 export default function PaymentStep({
   shippingAddress,
-  total,
+  quote,
+  quoteLoading,
+  quoteError,
   onBack,
   onPlaceOrder,
 }: PaymentStepProps) {
-  const codAvailable = total < COD_LIMIT;
+  const total = quote?.total ?? 0;
+  const codAvailable = quote?.codAvailable ?? false;
+  const codMaxOrderValue = quote?.codMaxOrderValue ?? 10000;
   const [selectedMethod, setSelectedMethod] = useState<'razorpay' | 'cod'>(
     'razorpay'
   );
+  // COD may become unavailable after a re-quote; never submit it then.
+  const paymentMethod = selectedMethod === 'cod' && !codAvailable ? 'razorpay' : selectedMethod;
   const [placing, setPlacing] = useState(false);
+  const canPlaceOrder = Boolean(quote?.canCheckout) && !quoteLoading && !placing;
+  const hasCartIssues = Boolean(quote && !quote.canCheckout);
 
   const handlePlaceOrder = async () => {
     setPlacing(true);
     try {
-      await onPlaceOrder(selectedMethod);
+      await onPlaceOrder(paymentMethod);
     } finally {
       setPlacing(false);
     }
@@ -37,130 +50,81 @@ export default function PaymentStep({
 
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-        <CreditCard className="w-5 h-5 text-primary" />
+      <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
+        <CreditCard className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
         Payment
       </h2>
 
       {/* Delivery address recap */}
-      <div className="bg-gray-50 rounded-xl p-4 text-sm text-gray-700">
-        <p className="font-semibold text-gray-900 mb-1">Delivering to</p>
-        <p>{shippingAddress.name} · {shippingAddress.phone}</p>
-        <p>
-          {shippingAddress.line1}
-          {shippingAddress.line2 ? `, ${shippingAddress.line2}` : ''},{' '}
-          {shippingAddress.city}, {shippingAddress.state} — {shippingAddress.pincode}
-        </p>
-        <button
-          type="button"
-          onClick={onBack}
-          className="mt-2 text-primary text-xs font-medium hover:underline"
-        >
-          Change address
+      <div className="flex items-start justify-between gap-4 rounded-xl bg-surface-muted p-4 text-sm text-muted-foreground">
+        <div className="min-w-0">
+          <p className="mb-1 font-semibold text-foreground">Delivering to</p>
+          <p>
+            {shippingAddress.name} · {shippingAddress.phone}
+          </p>
+          <p>
+            {shippingAddress.line1}
+            {shippingAddress.line2 ? `, ${shippingAddress.line2}` : ''}, {shippingAddress.city}, {shippingAddress.state} — {shippingAddress.pincode}
+          </p>
+        </div>
+        <button type="button" onClick={onBack} className="h-9 shrink-0 rounded-md px-2 text-sm font-semibold text-primary hover:underline">
+          Change
         </button>
       </div>
 
-      {/* Payment options */}
-      <div className="space-y-3">
-        <p className="text-sm font-medium text-gray-700">Choose payment method</p>
+      <fieldset className="space-y-3">
+        <legend className="mb-3 text-sm font-medium text-foreground">Choose a payment method</legend>
 
-        {/* Razorpay */}
-        <label
-          className={`flex gap-3 p-4 rounded-xl border-2 cursor-pointer transition-colors ${
-            selectedMethod === 'razorpay'
-              ? 'border-primary bg-primary/5'
-              : 'border-gray-200 hover:border-gray-300'
-          }`}
+        <RadioCard name="paymentMethod" value="razorpay" checked={paymentMethod === 'razorpay'} onChange={() => setSelectedMethod('razorpay')}>
+          <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <Smartphone className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            Pay online
+          </p>
+          <p className="mt-0.5 text-sm text-muted-foreground">UPI, cards, net banking and wallets — securely via Razorpay</p>
+        </RadioCard>
+
+        <RadioCard
+          name="paymentMethod"
+          value="cod"
+          checked={paymentMethod === 'cod'}
+          onChange={() => codAvailable && setSelectedMethod('cod')}
+          disabled={!codAvailable}
         >
-          <input
-            type="radio"
-            name="paymentMethod"
-            value="razorpay"
-            checked={selectedMethod === 'razorpay'}
-            onChange={() => setSelectedMethod('razorpay')}
-            className="mt-0.5 accent-primary"
-          />
-          <div className="flex-1">
-            <p className="text-sm font-semibold text-gray-900">Pay Online</p>
-            <p className="text-xs text-gray-500 mt-0.5">
-              Cards, UPI, Net Banking, Wallets, EMI — powered by Razorpay
-            </p>
-            <div className="flex gap-2 mt-2">
-              {['UPI', 'Visa', 'MC', 'Wallet'].map((tag) => (
-                <span
-                  key={tag}
-                  className="text-[10px] font-medium bg-gray-100 text-gray-600 rounded px-1.5 py-0.5"
-                >
-                  {tag}
-                </span>
-              ))}
-            </div>
-          </div>
-        </label>
+          <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <Truck className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            Cash on delivery
+          </p>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            {codAvailable ? 'Pay when your order arrives' : `Not available for orders above ${formatPrice(codMaxOrderValue)}`}
+          </p>
+        </RadioCard>
+      </fieldset>
 
-        {/* COD */}
-        <label
-          className={`flex gap-3 p-4 rounded-xl border-2 transition-colors ${
-            codAvailable
-              ? 'cursor-pointer ' +
-                (selectedMethod === 'cod'
-                  ? 'border-primary bg-primary/5'
-                  : 'border-gray-200 hover:border-gray-300')
-              : 'opacity-50 cursor-not-allowed border-gray-200'
-          }`}
-        >
-          <input
-            type="radio"
-            name="paymentMethod"
-            value="cod"
-            checked={selectedMethod === 'cod'}
-            onChange={() => codAvailable && setSelectedMethod('cod')}
-            disabled={!codAvailable}
-            className="mt-0.5 accent-primary"
-          />
-          <div className="flex items-start gap-2 flex-1">
-            <Truck className="w-4 h-4 text-gray-500 mt-0.5 shrink-0" />
-            <div>
-              <p className="text-sm font-semibold text-gray-900">Cash on Delivery</p>
-              <p className="text-xs text-gray-500 mt-0.5">
-                {codAvailable
-                  ? 'Pay when your order arrives'
-                  : `Not available for orders above ${formatPrice(COD_LIMIT)}`}
-              </p>
-            </div>
-          </div>
-        </label>
-      </div>
+      <p className="flex items-center gap-2 text-sm text-muted-foreground">
+        <ShieldCheck className="h-4 w-4 shrink-0 text-success" aria-hidden="true" />
+        Payments are processed securely by Razorpay. We never see your card details.
+      </p>
 
-      {/* Trust badge */}
-      <div className="flex items-center gap-2 text-xs text-gray-500">
-        <ShieldCheck className="w-4 h-4 text-green-600 shrink-0" />
-        <span>Your payment information is encrypted and secure.</span>
-      </div>
+      {(quoteError || hasCartIssues) && (
+        <Alert variant="error" live>
+          {quoteError ?? 'Some items in your cart changed. Please review your cart before placing the order.'}
+        </Alert>
+      )}
 
-      <div className="flex gap-3 pt-2">
-        <button
-          type="button"
-          onClick={onBack}
-          className="flex items-center gap-1.5 px-4 py-3 rounded-xl border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-        >
-          <ChevronLeft className="w-4 h-4" />
+      <div className="flex gap-3">
+        <Button variant="outline" size="lg" onClick={onBack} className="shrink-0">
+          <ChevronLeft className="h-4 w-4" aria-hidden="true" />
           Back
-        </button>
-
-        <button
-          type="button"
-          onClick={handlePlaceOrder}
-          disabled={placing}
-          className="flex-1 py-3 rounded-xl bg-primary text-white font-semibold disabled:opacity-50 hover:bg-primary-dark transition-colors flex items-center justify-center gap-2"
-        >
-          {placing && <Loader2 className="w-4 h-4 animate-spin" />}
+        </Button>
+        <Button size="lg" onClick={handlePlaceOrder} disabled={!canPlaceOrder} loading={placing} className="flex-1">
           {placing
             ? 'Placing order…'
-            : selectedMethod === 'cod'
-            ? `Place Order · ${formatPrice(total)}`
-            : `Pay ${formatPrice(total)}`}
-        </button>
+            : !quote
+              ? 'Calculating total…'
+              : paymentMethod === 'cod'
+                ? `Place order · ${formatPrice(total)}`
+                : `Pay ${formatPrice(total)}`}
+        </Button>
       </div>
     </div>
   );

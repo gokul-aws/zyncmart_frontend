@@ -1,9 +1,12 @@
 'use client';
 import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { SlidersHorizontal, X } from 'lucide-react';
-import { useSearchParams } from 'next/navigation';
+import { SlidersHorizontal } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import FilterSidebar from './FilterSidebar';
+import Dialog from '@/components/ui/Dialog';
+import Button from '@/components/ui/Button';
+import { useProducts } from '@/hooks/useProducts';
+import { activeFilterCount, parseProductFilters } from '@/lib/productFilters';
 import type { Category } from '@/types/category';
 
 interface Props {
@@ -11,83 +14,53 @@ interface Props {
   defaultCategory?: string;
 }
 
+/** Mobile filters in a bottom sheet. The result count comes from the grid's own (cached) query. */
 export default function FilterDrawer({ categories, defaultCategory }: Props) {
   const [open, setOpen] = useState(false);
+  const router = useRouter();
   const searchParams = useSearchParams();
+  const count = activeFilterCount(searchParams);
+  const { data, isFetching } = useProducts(parseProductFilters(searchParams, { category: defaultCategory }));
+  const total = data?.pagination?.total;
 
-  const activeCount = [
-    searchParams.get('category'),
-    searchParams.get('minPrice'),
-    searchParams.get('maxPrice'),
-    searchParams.get('inStock'),
-  ].filter(Boolean).length;
+  const clearAll = () => {
+    const params = new URLSearchParams();
+    const sortBy = searchParams.get('sortBy');
+    if (sortBy) params.set('sortBy', sortBy);
+    router.push(`?${params.toString()}`);
+  };
 
   return (
     <>
-      <button
-        onClick={() => setOpen(true)}
-        className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
-        aria-label="Open filters"
-      >
-        <SlidersHorizontal className="w-4 h-4" />
+      <Button variant="outline" onClick={() => setOpen(true)} aria-haspopup="dialog">
+        <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
         Filters
-        {activeCount > 0 && (
-          <span className="ml-0.5 w-5 h-5 rounded-full bg-primary text-white text-xs flex items-center justify-center">
-            {activeCount}
+        {count > 0 && (
+          <span className="ml-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs text-white">
+            {count}
+            <span className="sr-only"> applied</span>
           </span>
         )}
-      </button>
+      </Button>
 
-      <AnimatePresence>
-        {open && (
-          <>
-            {/* Backdrop */}
-            <motion.div
-              key="backdrop"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              onClick={() => setOpen(false)}
-              className="fixed inset-0 bg-black/40 z-40"
-              aria-hidden="true"
-            />
-
-            {/* Drawer */}
-            <motion.aside
-              key="drawer"
-              initial={{ x: '-100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '-100%' }}
-              transition={{ type: 'spring', damping: 28, stiffness: 280 }}
-              className="fixed inset-y-0 left-0 w-72 max-w-[85vw] bg-white z-50 overflow-y-auto shadow-xl"
-              aria-label="Filter panel"
-            >
-              <div className="p-5">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-base font-semibold text-gray-900">Filters</h2>
-                  <button
-                    onClick={() => setOpen(false)}
-                    className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
-                    aria-label="Close filters"
-                  >
-                    <X className="w-5 h-5 text-gray-600" />
-                  </button>
-                </div>
-
-                <FilterSidebar categories={categories} />
-
-                <button
-                  onClick={() => setOpen(false)}
-                  className="mt-8 w-full py-3 bg-primary text-white rounded-xl text-sm font-semibold hover:opacity-90 transition-opacity"
-                >
-                  Show Results
-                </button>
-              </div>
-            </motion.aside>
-          </>
-        )}
-      </AnimatePresence>
+      <Dialog
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Filters"
+        side="bottom"
+        footer={
+          <div className="flex gap-3">
+            <Button variant="outline" onClick={clearAll} disabled={count === 0} className="flex-1">
+              Clear all
+            </Button>
+            <Button onClick={() => setOpen(false)} className="flex-[2]" loading={isFetching}>
+              {total === undefined ? 'Show results' : `Show ${total} result${total === 1 ? '' : 's'}`}
+            </Button>
+          </div>
+        }
+      >
+        <FilterSidebar categories={categories} defaultCategory={defaultCategory} />
+      </Dialog>
     </>
   );
 }

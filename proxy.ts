@@ -1,20 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-// Next.js 16 renamed the `middleware.ts` file convention to `proxy.ts` (same
-// runtime behavior). This is an OPTIMISTIC, second layer of route
-// protection that runs before the client-side AuthGuard/AdminGuard
-// components mount — it only reads cookies (no DB calls), so it must never
-// be treated as the source of truth. The backend's `authenticate`/
-// `requireAdmin` middleware is the real authority; this just avoids briefly
-// serving a protected shell to an obviously-unauthenticated visitor, or
-// bouncing a signed-in visitor back through the auth pages.
-//
-// `refreshToken` and `auth-role` are both set (and cleared together) by
-// lib/store/authStore.ts. Neither is a secret on its own: refreshToken is
-// already a plain, non-HttpOnly cookie in this app's architecture (it has
-// to be readable by the axios client to drive the refresh flow), and
-// auth-role is just the user's role, not a credential.
 const PROTECTED = ['/account', '/checkout', '/my-orders'];
 const ADMIN_PROTECTED = ['/admin'];
 const AUTH_ONLY = ['/login', '/register', '/forgot-password'];
@@ -28,7 +14,8 @@ export function proxy(request: NextRequest) {
   }
 
   const hasAuth =
-    request.cookies.has('refreshToken') || !!request.headers.get('authorization');
+    request.cookies.has('refreshToken') ||
+    !!request.headers.get('authorization');
 
   const isAdminLoginPage = ADMIN_AUTH_ONLY.some((p) => pathname.startsWith(p));
   const isAdminProtectedRoute = ADMIN_PROTECTED.some((p) => pathname.startsWith(p)) && !isAdminLoginPage;
@@ -45,17 +32,6 @@ export function proxy(request: NextRequest) {
     const loginUrl = new URL(redirectUrl, request.url);
     loginUrl.searchParams.set('redirect', pathname);
     return NextResponse.redirect(loginUrl);
-  }
-
-  // Optimistic role check for /admin/*: only redirect when we positively
-  // know the role is non-admin. A missing/stale cookie falls through to
-  // AdminGuard, which verifies against the live `user` object instead of
-  // guessing.
-  if (isAdminProtectedRoute && hasAuth) {
-    const role = request.cookies.get('auth-role')?.value;
-    if (role && role !== 'admin') {
-      return NextResponse.redirect(new URL('/', request.url));
-    }
   }
 
   if (AUTH_ONLY.some((p) => pathname.startsWith(p)) && hasAuth && !request.nextUrl.searchParams.has('redirect')) {

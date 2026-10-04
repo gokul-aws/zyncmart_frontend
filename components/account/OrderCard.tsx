@@ -5,18 +5,18 @@ import Badge from '@/components/ui/Badge';
 import { formatPrice, formatDate } from '@/lib/formatters';
 import type { Order, OrderStatus } from '@/types/order';
 
-const STATUS_VARIANT: Record<OrderStatus, 'default' | 'success' | 'error' | 'warning' | 'outline'> = {
-  placed: 'outline',
+const STATUS_VARIANT: Record<OrderStatus, 'default' | 'neutral' | 'success' | 'error' | 'warning' | 'outline'> = {
+  placed: 'neutral',
   confirmed: 'default',
-  processing: 'warning',
+  processing: 'default',
   shipped: 'default',
   delivered: 'success',
   cancelled: 'error',
-  returned: 'error',
+  returned: 'neutral',
 };
 
 const STATUS_LABEL: Record<OrderStatus, string> = {
-  placed: 'Order Placed',
+  placed: 'Order placed',
   confirmed: 'Confirmed',
   processing: 'Processing',
   shipped: 'Shipped',
@@ -32,43 +32,39 @@ interface OrderCardProps {
 export default function OrderCard({ order }: OrderCardProps) {
   const thumbnails = order.items.slice(0, 3);
   const extra = order.items.length - thumbnails.length;
+  const paymentPending = order.status === 'placed' && order.payment.method === 'razorpay' && order.payment.status === 'pending';
 
   return (
     <Link
       href={`/account/orders/${order._id}`}
-      className="block bg-white border border-gray-100 rounded-xl p-4 hover:border-primary/30 hover:shadow-sm transition-all group"
+      className="group block rounded-xl border border-border bg-surface p-4 transition-colors hover:border-border-strong sm:p-5"
+      aria-label={`Order ${order.orderNumber}, ${STATUS_LABEL[order.status]}, ${formatPrice(order.pricing.total)}`}
     >
-      <div className="flex items-start justify-between gap-4 mb-3">
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-semibold text-gray-900">#{order.orderNumber}</p>
-          <p className="text-xs text-gray-400 mt-0.5">{formatDate(order.createdAt)}</p>
+          <p className="text-sm font-semibold text-foreground">#{order.orderNumber}</p>
+          <p className="mt-0.5 text-sm text-muted-foreground">{formatDate(order.createdAt)}</p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          {paymentPending && <Badge variant="warning">Payment pending</Badge>}
           <Badge variant={STATUS_VARIANT[order.status]}>{STATUS_LABEL[order.status]}</Badge>
-          <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-primary transition-colors" />
+          <ChevronRight className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-foreground" aria-hidden="true" />
         </div>
       </div>
 
-      {/* Item thumbnails */}
-      <div className="flex items-center gap-2 mb-3">
+      <div className="mt-4 flex items-center gap-2">
         {thumbnails.map((item, idx) => (
-          <div key={idx} className="relative w-12 h-12 bg-gray-100 rounded-lg overflow-hidden shrink-0">
-            <Image src={item.image} alt={item.name} fill sizes="48px" className="object-cover" />
+          <div key={idx} className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-surface-muted">
+            {item.image && <Image src={item.image} alt="" fill sizes="48px" className="object-cover" />}
           </div>
         ))}
         {extra > 0 && (
-          <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center text-xs text-gray-500 font-medium shrink-0">
-            +{extra}
-          </div>
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-surface-muted text-sm font-medium text-muted-foreground">+{extra}</div>
         )}
-        <p className="text-sm text-gray-500 ml-1">
+        <p className="ml-1 text-sm text-muted-foreground">
           {order.items.length} {order.items.length === 1 ? 'item' : 'items'}
         </p>
-      </div>
-
-      <div className="flex justify-between items-center text-sm">
-        <span className="text-gray-500">Total</span>
-        <span className="font-semibold text-gray-900">{formatPrice(order.pricing.total)}</span>
+        <p className="ml-auto text-sm font-semibold tabular-nums text-foreground">{formatPrice(order.pricing.total)}</p>
       </div>
     </Link>
   );

@@ -1,12 +1,12 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/store/authStore';
 import { useCartStore } from '@/lib/store/cartStore';
-import { useWishlistStore } from '@/lib/store/wishlistStore';
 import { login, register, verifyRegistrationOtp, resendRegistrationOtp, logout } from '@/lib/api/auth';
 import type { LoginPayload, RegisterPayload } from '@/lib/api/auth';
+import { safeRedirect, resolvePostLoginDestination } from '@/lib/safeRedirect';
 
 interface AxiosErrorLike {
   response?: {
@@ -56,19 +56,13 @@ export function useAuth() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
-  // `loading` state only flips the disabled attribute on the next render, which
-  // isn't fast enough to stop a second submit fired in the same tick (e.g. a
-  // fast double-click before React re-renders). Guard re-entrancy with a ref.
-  const inFlight = useRef(false);
 
   const { setAuth, clearAuth, user, isAuthenticated } = useAuthStore();
+  // Every post-auth navigation goes through safeRedirect, so no caller can
+  // send the browser to another origin or a javascript:/data: URL.
   const finishAuth = async (destination: string) => {
-    // A cart/wishlist load failure here must not surface as a login/registration
-    // error — auth already succeeded by this point. Both reload again on the
-    // next page mount (see Providers.tsx) if this attempt fails.
-    await useCartStore.getState().loadCart().catch(() => {});
-    await useWishlistStore.getState().loadWishlist().catch(() => {});
-    window.location.href = destination;
+    await useCartStore.getState().loadCart();
+    window.location.assign(safeRedirect(destination, '/'));
   };
 
   const signIn = async (
@@ -76,8 +70,6 @@ export function useAuth() {
     redirectTo = '/account',
     rememberMe = false
   ) => {
-    if (inFlight.current) return;
-    inFlight.current = true;
     setLoading(true);
     setError(null);
     try {
@@ -92,23 +84,12 @@ export function useAuth() {
 
       // Unified login: role decides where the user lands after sign-in.
       // Admins go to the admin dashboard (unless already headed to a specific
-      // /admin/* page); everyone else goes home unless an explicit non-admin
-      // redirect (e.g. back to /account or /checkout) was requested.
-      const requestedAdminPath = redirectTo.startsWith('/admin');
-      const isAdminUser = newUser.role === 'admin';
-      const destination = isAdminUser
-        ? requestedAdminPath
-          ? redirectTo
-          : '/admin/dashboard'
-        : requestedAdminPath
-          ? '/'
-          : redirectTo;
-
-      await finishAuth(destination);
+      // /admin/* page); everyone else goes to the requested page unless it is
+      // an admin page. Unsafe redirects fall back to "/".
+      await finishAuth(resolvePostLoginDestination({ requested: redirectTo, role: newUser.role }));
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Login failed. Please try again.'));
     } finally {
-      inFlight.current = false;
       setLoading(false);
     }
   };
@@ -117,8 +98,6 @@ export function useAuth() {
   // — returns the email on success (for the UI to move to the OTP step) or
   // null on failure (see `error`).
   const signUp = async (payload: RegisterPayload): Promise<string | null> => {
-    if (inFlight.current) return null;
-    inFlight.current = true;
     setLoading(true);
     setError(null);
     try {
@@ -128,7 +107,6 @@ export function useAuth() {
       setError(getErrorMessage(err, 'Registration failed. Please try again.'));
       return null;
     } finally {
-      inFlight.current = false;
       setLoading(false);
     }
   };
@@ -136,20 +114,17 @@ export function useAuth() {
   // Step 2 of registration: verify the OTP, which creates the account and
   // logs the user in — same completion flow as signIn.
   const verifyOtp = async (email: string, otp: string, redirectTo = '/account') => {
-    if (inFlight.current) return false;
-    inFlight.current = true;
     setLoading(true);
     setError(null);
     try {
       const { user: newUser, accessToken, refreshToken } = await verifyRegistrationOtp(email, otp);
       setAuth(newUser, accessToken, refreshToken);
-      await finishAuth(redirectTo);
+      await finishAuth(resolvePostLoginDestination({ requested: redirectTo, role: newUser.role }));
       return true;
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Invalid or expired OTP. Please try again.'));
       return false;
     } finally {
-      inFlight.current = false;
       setLoading(false);
     }
   };
@@ -174,7 +149,6 @@ export function useAuth() {
     clearAuth();
     useCartStore.setState({ items: [], loading: false });
     useCartStore.getState().loadCart();
-    useWishlistStore.setState({ items: [], products: [], loading: false });
     router.push('/');
   };
 

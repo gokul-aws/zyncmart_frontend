@@ -28,14 +28,14 @@ export const useAuthStore = create<AuthStore>()(
         const nextAccessToken = accessToken !== undefined ? accessToken : get().accessToken;
 
         if (typeof window !== 'undefined' && refreshToken) {
-          const suffix = process.env.NODE_ENV === 'production' ? '; Secure' : '';
-          const maxAge = cookieMaxAge > 0 ? `; max-age=${cookieMaxAge}` : '';
-          document.cookie = `refreshToken=${refreshToken}; path=/; SameSite=Lax${maxAge}${suffix}`;
-          // Non-sensitive role hint (not a secret) so proxy.ts can do an
-          // optimistic redirect for /admin/* before the client-side
-          // AdminGuard mounts. The backend's requireAdmin middleware is the
-          // actual authority — this cookie only affects UX, never access.
-          document.cookie = `auth-role=${user.role}; path=/; SameSite=Lax${maxAge}${suffix}`;
+          let cookie = `refreshToken=${refreshToken}; path=/; SameSite=Lax`;
+          if (cookieMaxAge > 0) {
+            cookie += `; max-age=${cookieMaxAge}`;
+          }
+          if (process.env.NODE_ENV === 'production') {
+            cookie += '; Secure';
+          }
+          document.cookie = cookie;
         }
 
         set({ user, accessToken: nextAccessToken });
@@ -43,7 +43,6 @@ export const useAuthStore = create<AuthStore>()(
       clearAuth: () => {
         if (typeof window !== 'undefined') {
           document.cookie = `refreshToken=; path=/; max-age=0; SameSite=Lax`;
-          document.cookie = `auth-role=; path=/; max-age=0; SameSite=Lax`;
         }
         set({ user: null, accessToken: null });
       },

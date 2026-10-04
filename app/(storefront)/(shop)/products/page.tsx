@@ -1,12 +1,6 @@
 import type { Metadata } from 'next';
-import { Suspense } from 'react';
-import Link from 'next/link';
 import { fetchCategories, fetchCategory } from '@/lib/api/categories';
-import FilterSidebar from '@/components/filters/FilterSidebar';
-import FilterDrawer from '@/components/filters/FilterDrawer';
-import SortDropdown from '@/components/filters/SortDropdown';
-import ProductGrid from '@/components/product/ProductGrid';
-import { ProductGridSkeleton } from '@/components/product/ProductSkeleton';
+import ProductListingLayout from '@/components/listing/ProductListingLayout';
 import type { Category } from '@/types/category';
 
 const SITE_NAME = process.env.NEXT_PUBLIC_SITE_NAME ?? 'Store';
@@ -73,73 +67,14 @@ export default async function ProductsPage({
     categories.find((c) => c.slug === categorySlug)?.name ?? 'All Products';
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-      {/* Breadcrumb */}
-      <nav aria-label="Breadcrumb" className="mb-4">
-        <ol className="flex items-center gap-2 text-sm text-gray-500">
-          <li>
-            <Link href="/" className="hover:text-gray-800 transition-colors">
-              Home
-            </Link>
-          </li>
-          <li aria-hidden="true" className="text-gray-300">/</li>
-          {categorySlug ? (
-            <>
-              <li>
-                <Link
-                  href="/products"
-                  className="hover:text-gray-800 transition-colors"
-                >
-                  Products
-                </Link>
-              </li>
-              <li aria-hidden="true" className="text-gray-300">/</li>
-              <li className="text-gray-900 font-medium">{categoryName}</li>
-            </>
-          ) : (
-            <li className="text-gray-900 font-medium">Products</li>
-          )}
-        </ol>
-      </nav>
-
-      {/* Page heading */}
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">{categoryName}</h1>
-
-      <div className="flex gap-8 items-start">
-        {/* Desktop sidebar (sticky) */}
-        <aside className="hidden md:block w-64 shrink-0">
-          <div className="sticky top-24">
-            <Suspense fallback={null}>
-              <FilterSidebar categories={categories} />
-            </Suspense>
-          </div>
-        </aside>
-
-        {/* Main content area */}
-        <div className="flex-1 min-w-0">
-          {/* Controls bar */}
-          <div className="flex items-center justify-between mb-5">
-            {/* Mobile filter trigger */}
-            <div className="md:hidden">
-              <Suspense fallback={null}>
-                <FilterDrawer categories={categories} />
-              </Suspense>
-            </div>
-
-            {/* Sort dropdown (right-aligned on desktop) */}
-            <div className="md:ml-auto">
-              <Suspense fallback={null}>
-                <SortDropdown />
-              </Suspense>
-            </div>
-          </div>
-
-          {/* Product grid */}
-          <Suspense fallback={<ProductGridSkeleton count={12} />}>
-            <ProductGrid />
-          </Suspense>
-        </div>
-      </div>
-    </div>
+    <ProductListingLayout
+      title={categoryName}
+      breadcrumbs={
+        categorySlug
+          ? [{ label: 'Home', href: '/' }, { label: 'Products', href: '/products' }, { label: categoryName }]
+          : [{ label: 'Home', href: '/' }, { label: 'Products' }]
+      }
+      categories={categories}
+    />
   );
 }

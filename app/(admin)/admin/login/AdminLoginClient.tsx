@@ -6,6 +6,13 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useAuth } from '@/hooks/useAuth';
 import { useSearchParams } from 'next/navigation';
+import { safeRedirect } from '@/lib/safeRedirect';
+import AuthCard from '@/components/auth/AuthCard';
+import Field from '@/components/ui/Field';
+import { Input } from '@/components/ui/Input';
+import PasswordInput from '@/components/ui/PasswordInput';
+import Button from '@/components/ui/Button';
+import Alert from '@/components/ui/Alert';
 
 const schema = z.object({
   email: z.string().email('Enter a valid email'),
@@ -17,7 +24,7 @@ type FormData = z.infer<typeof schema>;
 export default function AdminLoginClient() {
   const { signIn, loading, error } = useAuth();
   const searchParams = useSearchParams();
-  const redirect = searchParams?.get('redirect') ?? '/admin/dashboard';
+  const redirect = safeRedirect(searchParams?.get('redirect'), '/admin/dashboard');
 
   const {
     register,
@@ -38,62 +45,31 @@ export default function AdminLoginClient() {
   };
 
   return (
-    <div className="min-h-[80vh] flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-md">
-        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-10">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Admin Sign In</h1>
-          <p className="text-sm text-gray-500 mb-6">Enter your admin credentials to access the dashboard.</p>
-
-          {error && (
-            <div className="mb-4 px-4 py-3 bg-red-50 border border-red-100 rounded-lg text-sm text-error whitespace-pre-line">
-              {error}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-              <input
-                {...register('email')}
-                id="email"
-                type="email"
-                autoComplete="email"
-                className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                placeholder="admin@example.com"
-              />
-              {errors.email && <p className="mt-1 text-xs text-error">{errors.email.message}</p>}
-            </div>
-
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-              <input
-                {...register('password')}
-                id="password"
-                type="password"
-                autoComplete="current-password"
-                className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                placeholder="••••••••"
-              />
-              {errors.password && <p className="mt-1 text-xs text-error">{errors.password.message}</p>}
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3 bg-primary text-white font-semibold rounded-2xl hover:bg-primary-dark transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {loading ? 'Signing in…' : 'Sign In'}
-            </button>
-          </form>
-
-          <p className="mt-6 text-center text-sm text-gray-500">
-            Need a regular account?{' '}
-            <Link href="/login" className="font-medium text-primary hover:underline">
-              User login
-            </Link>
-          </p>
-        </div>
-      </div>
-    </div>
+    <AuthCard
+      title="Admin sign in"
+      description="Sign in with an administrator account."
+      footer={
+        <Link href="/" className="font-semibold text-primary hover:underline">
+          Back to the store
+        </Link>
+      }
+    >
+      {error && (
+        <Alert variant="error" live className="mb-5 whitespace-pre-line">
+          {error}
+        </Alert>
+      )}
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
+        <Field label="Email" error={errors.email?.message}>
+          <Input {...register('email')} type="email" inputMode="email" autoComplete="email" />
+        </Field>
+        <Field label="Password" error={errors.password?.message}>
+          <PasswordInput {...register('password')} autoComplete="current-password" />
+        </Field>
+        <Button type="submit" size="lg" fullWidth loading={loading}>
+          {loading ? 'Signing in…' : 'Sign in'}
+        </Button>
+      </form>
+    </AuthCard>
   );
 }

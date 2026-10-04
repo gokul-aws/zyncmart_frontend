@@ -1,5 +1,7 @@
 'use client';
 
+import { cn } from '@/lib/utils';
+
 interface Variant {
   name: string;
   options: string[];
@@ -9,35 +11,44 @@ interface ProductVariantsProps {
   variants: Variant[];
   selected: Record<string, string>;
   onChange: (variantName: string, option: string) => void;
+  /** Options that exist but cannot be bought (e.g. out of stock), per group. */
+  unavailable?: Record<string, string[]>;
 }
 
-export default function ProductVariants({ variants, selected, onChange }: ProductVariantsProps) {
+export default function ProductVariants({ variants, selected, onChange, unavailable = {} }: ProductVariantsProps) {
   if (!variants.length) return null;
 
   return (
     <div className="flex flex-col gap-4">
       {variants.map((variant) => (
-        <div key={variant.name}>
-          <p className="text-sm font-medium text-gray-700 mb-2">
-            {variant.name}:{' '}
-            <span className="font-semibold text-gray-900">{selected[variant.name]}</span>
-          </p>
+        <fieldset key={variant.name}>
+          <legend className="mb-2.5 text-sm font-medium text-foreground">
+            {variant.name}: <span className="font-semibold">{selected[variant.name] || 'Select'}</span>
+          </legend>
           <div className="flex flex-wrap gap-2">
-            {variant.options.map((option) => (
-              <button
-                key={option}
-                onClick={() => onChange(variant.name, option)}
-                className={`px-3.5 py-1.5 rounded-md border text-sm font-medium transition-colors ${
-                  selected[variant.name] === option
-                    ? 'border-primary bg-primary text-white'
-                    : 'border-gray-300 bg-white text-gray-700 hover:border-gray-500'
-                }`}
-              >
-                {option}
-              </button>
-            ))}
+            {variant.options.map((option) => {
+              const isUnavailable = unavailable[variant.name]?.includes(option) ?? false;
+              const isSelected = selected[variant.name] === option;
+              return (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => onChange(variant.name, option)}
+                  disabled={isUnavailable}
+                  aria-pressed={isSelected}
+                  aria-label={`${option}${isUnavailable ? ', out of stock' : ''}`}
+                  className={cn(
+                    'inline-flex h-11 min-w-11 items-center justify-center rounded-lg border bg-surface px-3.5 text-sm font-medium transition-colors',
+                    isSelected ? 'border-ink ring-1 ring-ink' : 'border-border-strong hover:border-subtle-foreground',
+                    'disabled:cursor-not-allowed disabled:border-border disabled:bg-surface-muted disabled:text-muted-foreground disabled:line-through'
+                  )}
+                >
+                  {option}
+                </button>
+              );
+            })}
           </div>
-        </div>
+        </fieldset>
       ))}
     </div>
   );

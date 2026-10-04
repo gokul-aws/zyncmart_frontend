@@ -6,6 +6,13 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useAuth } from '@/hooks/useAuth';
 import { useSearchParams } from 'next/navigation';
+import { safeRedirect } from '@/lib/safeRedirect';
+import AuthCard from '@/components/auth/AuthCard';
+import Field from '@/components/ui/Field';
+import { Input, Checkbox } from '@/components/ui/Input';
+import PasswordInput from '@/components/ui/PasswordInput';
+import Button from '@/components/ui/Button';
+import Alert from '@/components/ui/Alert';
 
 const schema = z.object({
   email: z.string().email('Enter a valid email'),
@@ -28,8 +35,9 @@ export default function LoginClient() {
   // This page now handles both customer and admin sign-in (see AGENTS/task
   // notes on the unified login flow). With no explicit `redirect` query param,
   // land on Home; useAuth.signIn() overrides this to the admin dashboard when
-  // the authenticated user's role is 'admin'.
-  const redirect = searchParams?.get('redirect') ?? '/';
+  // the authenticated user's role is 'admin'. The parameter is attacker-
+  // controllable, so only same-origin paths survive (see lib/safeRedirect).
+  const redirect = safeRedirect(searchParams?.get('redirect'), '/');
 
   const onSubmit = async (data: FormData) => {
     try {
@@ -44,77 +52,47 @@ export default function LoginClient() {
   };
 
   return (
-    <div className="min-h-[80vh] flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-          <h1 className="text-2xl font-bold text-gray-900 mb-1">Welcome back</h1>
-          <p className="text-sm text-gray-500 mb-6">Sign in to your account</p>
+    <AuthCard
+      title="Welcome back"
+      description="Sign in to your account"
+      footer={
+        <>
+          New to Zyncmart?{' '}
+          <Link href="/register" className="font-semibold text-primary hover:underline">
+            Create an account
+          </Link>
+        </>
+      }
+    >
+      {error && (
+        <Alert variant="error" live className="mb-5 whitespace-pre-line">
+          {error}
+        </Alert>
+      )}
 
-          {error && (
-            <div className="mb-4 px-4 py-3 bg-red-50 border border-red-100 rounded-lg text-sm text-error whitespace-pre-line">
-              {error}
-            </div>
-          )}
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
+        <Field label="Email" error={errors.email?.message}>
+          <Input {...register('email')} type="email" autoComplete="email" inputMode="email" />
+        </Field>
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-              <input
-                {...register('email')}
-                id="email"
-                type="email"
-                autoComplete="email"
-                className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                placeholder="you@example.com"
-              />
-              {errors.email && <p className="mt-1 text-xs text-error">{errors.email.message}</p>}
-            </div>
-
-            <div>
-              <div className="flex justify-between items-center mb-1">
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700">Password</label>
-                <Link href="/forgot-password" className="text-xs text-primary hover:underline">
-                  Forgot password?
-                </Link>
-              </div>
-              <input
-                {...register('password')}
-                id="password"
-                type="password"
-                autoComplete="current-password"
-                className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                placeholder="••••••••"
-              />
-              {errors.password && <p className="mt-1 text-xs text-error">{errors.password.message}</p>}
-            </div>
-
-            <div className="flex items-center gap-2">
-              <input
-                {...register('rememberMe')}
-                type="checkbox"
-                id="rememberMe"
-                className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
-              />
-              <label htmlFor="rememberMe" className="text-sm text-gray-600">Remember me</label>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3 bg-primary text-white font-semibold rounded-xl hover:bg-primary-dark transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {loading ? 'Signing in…' : 'Sign In'}
-            </button>
-          </form>
-
-          <p className="mt-6 text-center text-sm text-gray-500">
-            Don&apos;t have an account?{' '}
-            <Link href="/register" className="font-medium text-primary hover:underline">
-              Create one
+        <Field
+          label="Password"
+          error={errors.password?.message}
+          labelAside={
+            <Link href="/forgot-password" className="text-sm font-medium text-primary hover:underline">
+              Forgot password?
             </Link>
-          </p>
-        </div>
-      </div>
-    </div>
+          }
+        >
+          <PasswordInput {...register('password')} autoComplete="current-password" />
+        </Field>
+
+        <Checkbox {...register('rememberMe')} label="Keep me signed in" />
+
+        <Button type="submit" size="lg" fullWidth loading={loading}>
+          {loading ? 'Signing in…' : 'Sign in'}
+        </Button>
+      </form>
+    </AuthCard>
   );
 }

@@ -7,6 +7,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import AdminPageShell from '@/components/admin/AdminPageShell';
 import AdminProductTable from '@/components/admin/products/AdminProductTable';
 import EmptyState from '@/components/ui/EmptyState';
+import { ConfirmDialog } from '@/components/ui/Dialog';
 import Badge from '@/components/ui/Badge';
 import { useAdminProducts, useBulkDeleteAdminProducts, useToggleAdminProductStatus } from '@/hooks/useAdminProducts';
 import { useCategories } from '@/hooks/useCategories';
@@ -80,23 +81,27 @@ function ProductsPageContent() {
     setSelectedIds([]);
   };
 
-  const handleDeleteProduct = async (product: { _id: string; name: string }) => {
-    if (!window.confirm(`Delete ${product.name}? This cannot be undone.`)) {
-      return;
-    }
+  // Confirmed through <ConfirmDialog> (replaces window.confirm).
+  const [pendingDelete, setPendingDelete] = useState<{ ids: string[]; label: string } | null>(null);
 
-    await bulkDeleteMutation.mutateAsync([product._id]);
-    setSelectedIds((current) => current.filter((id) => id !== product._id));
+  const handleDeleteProduct = (product: { _id: string; name: string }) => {
+    setPendingDelete({ ids: [product._id], label: product.name });
   };
 
-  const handleBulkDelete = async () => {
+  const handleBulkDelete = () => {
     if (!selectedIds.length) return;
-    if (!window.confirm('Delete selected products? This cannot be undone.')) {
-      return;
-    }
+    setPendingDelete({ ids: selectedIds, label: `${selectedIds.length} selected product${selectedIds.length === 1 ? '' : 's'}` });
+  };
 
-    await bulkDeleteMutation.mutateAsync(selectedIds);
-    setSelectedIds([]);
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    const ids = pendingDelete.ids;
+    try {
+      await bulkDeleteMutation.mutateAsync(ids);
+      setSelectedIds((current) => current.filter((id) => !ids.includes(id)));
+    } finally {
+      setPendingDelete(null);
+    }
   };
 
   const handleStatusToggle = async (product: { _id: string; isActive: boolean }) => {
@@ -120,10 +125,10 @@ function ProductsPageContent() {
         </Link>
       }
     >
-      <div className="grid gap-4 lg:grid-cols-[1fr_auto]">
+      <div className="grid gap-4 [&>*]:min-w-0 lg:grid-cols-[1fr_auto]">
         <form onSubmit={handleSearchSubmit} className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="relative flex-1">
-            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle-foreground" />
             <input
               name="search"
               defaultValue={search}
@@ -149,7 +154,7 @@ function ProductsPageContent() {
         </button>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[220px_1fr]">
+      <div className="grid gap-4 [&>*]:min-w-0 lg:grid-cols-[220px_1fr]">
         <aside className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-950">
           <div className="space-y-4">
             <div>
@@ -158,8 +163,8 @@ function ProductsPageContent() {
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">Category</label>
-              <select
+              <label htmlFor="fld-page-category" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">Category</label>
+              <select id="fld-page-category"
                 value={category}
                 onChange={(event) => handleQueryUpdate({ category: event.target.value || undefined, page: '1' })}
                 className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
@@ -174,8 +179,8 @@ function ProductsPageContent() {
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">Status</label>
-              <select
+              <label htmlFor="fld-page-status" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">Status</label>
+              <select id="fld-page-status"
                 value={status}
                 onChange={(event) => handleQueryUpdate({ status: event.target.value || undefined, page: '1' })}
                 className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
@@ -193,7 +198,7 @@ function ProductsPageContent() {
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{totalItems} products</p>
-                <p className="text-xs text-slate-400 dark:text-slate-500">Showing page {page} of {totalPages || 1}</p>
+                <p className="text-xs text-subtle-foreground dark:text-slate-500">Showing page {page} of {totalPages || 1}</p>
               </div>
               <div className="flex flex-wrap items-center gap-3">
                 <Badge variant="default">Page size: {DEFAULT_PAGE_SIZE}</Badge>
@@ -271,6 +276,17 @@ function ProductsPageContent() {
           )}
         </section>
       </div>
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title={`Delete ${pendingDelete?.label ?? ''}?`}
+        description="Products and their images are permanently removed. This can't be undone."
+        confirmLabel="Delete"
+        destructive
+        loading={bulkDeleteMutation.isPending}
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={confirmDelete}
+      />
     </AdminPageShell>
   );
 }

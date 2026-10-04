@@ -1,80 +1,106 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import {
-  ShoppingCart,
-  Zap,
-  Heart,
-  Share2,
-  MessageCircle,
-  Check,
-  MapPin,
-  Truck,
-  Shield,
-  RotateCcw,
-} from 'lucide-react';
+import { Banknote, RotateCcw, ShoppingBag, Truck, Zap } from 'lucide-react';
 import StarRating from '@/components/ui/StarRating';
 import PriceDisplay from '@/components/ui/PriceDisplay';
+import QuantitySelector from '@/components/ui/QuantitySelector';
+import WishlistButton from '@/components/ui/WishlistButton';
+import Button from '@/components/ui/Button';
 import ProductVariants from './ProductVariants';
 import ProductColorSelector from './ProductColorSelector';
-import QuantitySelector from '@/components/ui/QuantitySelector';
 import ProductShare from './ProductShare';
 import { useCartStore } from '@/lib/store/cartStore';
-import { useBuyNowStore } from '@/lib/store/buyNowStore';
-import { useWishlistStore } from '@/lib/store/wishlistStore';
-import { useAuthStore } from '@/lib/store/authStore';
 import { GA } from '@/lib/analytics';
-import type { Product } from '@/types/product';
-import type { useVariantSelection } from '@/hooks/useProduct';
+import { getApiError } from '@/lib/api/orders';
+import { formatPrice } from '@/lib/formatters';
+import { cn } from '@/lib/utils';
+import type { Product, ColorVariant } from '@/types/product';
 
-const WHATSAPP = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER;
+/** Opens the Reviews tab (ProductTabs listens for this). */
+export const SHOW_REVIEWS_EVENT = 'zyncmart:show-reviews';
 
 interface ProductInfoProps {
   product: Product;
-  selection: ReturnType<typeof useVariantSelection>;
+  selectedColorVariant?: ColorVariant | null;
+  onColorChange?: (variant: ColorVariant) => void;
 }
 
-export default function ProductInfo({ product, selection }: ProductInfoProps) {
+export default function ProductInfo({
+  product,
+  selectedColorVariant = null,
+  onColorChange,
+}: ProductInfoProps) {
   const router = useRouter();
   const { addItem, toggleDrawer } = useCartStore();
-  const setBuyNowItems = useBuyNowStore((s) => s.setItems);
-  const { hasItem, toggleItem } = useWishlistStore();
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
-  const {
-    hasVariants,
-    colors,
-    hasColorAxis,
-    selectedColor,
-    setSelectedColor,
-    sizesForSelectedColor,
-    hasSizeAxis,
-    selectedSize,
-    setSelectedSize,
-    selectedVariant,
-  } = selection;
+  // Resolved from the selected color variant, falling back to the product's
+  // own fields for legacy products with no color variants.
+  // For variable products, use the first variant's price as default
+  const isVariable = product.productType === 'variable';
+  const defaultVariantPrice = isVariable && product.variants?.length
+    ? product.variants[0].price
+    : product.price;
+  const activePrice = selectedColorVariant?.price ?? defaultVariantPrice;
+  const activeStock = selectedColorVariant ? selectedColorVariant.stock : product.stock;
+  const activeSku = selectedColorVariant?.sku ?? (isVariable && product.variants?.length ? product.variants[0].sku : product.sku);
+  const activeOriginalPrice = selectedColorVariant
+    ? selectedColorVariant.originalPrice
+    : (isVariable && product.variants?.length ? product.variants[0].originalPrice : product.originalPrice ?? product.comparePrice);
 
-  // Resolved from the selected variant, falling back to the product's own
-  // fields for simple products with no variants at all.
-  const activeImages = selectedVariant?.images?.length ? selectedVariant.images : product.images;
-  const primaryImage = activeImages.find((i) => i.isPrimary) ?? activeImages[0];
-  const activePrice = selectedVariant?.price ?? product.price;
-  const activeStock = selectedVariant ? selectedVariant.stock : product.stock;
-  const activeSku = selectedVariant?.sku ?? product.sku;
-  const activeOriginalPrice = selectedVariant
-    ? selectedVariant.originalPrice
-    : (product.originalPrice ?? product.comparePrice);
-  // A combination the admin never defined (e.g. Red/XL when only Red/M and
-  // Blue/XL exist) — the customer picked a real color and a real size, but
-  // no variant matches. Never treat this as purchasable.
-  const noMatchingVariant = hasVariants && !selectedVariant;
+  // Variable products: the selection is always ONE exact variant (colour +
+  // size). The colour and size pickers are two views of that single choice,
+  // so the variant added to the cart is exactly the one the customer sees.
+  const usesExactVariants = isVariable && !product.colorVariants?.length && (product.variants?.length ?? 0) > 0;
+  const variantEntries = useMemo<ColorVariant[]>(
+    () => (usesExactVariants ? product.variants ?? [] : [])
+      .filter((v) => v.color?.name)
+      .map((v) => ({
+        _id: v._id,
+        color: v.color.name,
+        colorCode: v.color.code,
+        size: v.size,
+        images: v.image ? [{ url: v.image, publicId: '', isPrimary: true }] : [],
+        stock: v.stock,
+        sku: v.sku,
+        price: v.price,
+        originalPrice: v.originalPrice,
+      })),
+    [usesExactVariants, product.variants]
+  );
+  const selectedColor = selectedColorVariant?.color ?? null;
+  const selectedSize = selectedColorVariant?.size ?? null;
 
-  const [quantity, setQuantity] = useState(1);
-  const [pincode, setPincode] = useState('');
-  const [pincodeMsg, setPincodeMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  // One swatch per colour. Picking a colour keeps the chosen size when that
+  // colour has it in stock, otherwise the first in-stock size of that colour.
+  const colorOptions = useMemo<ColorVariant[]>(() => {
+    const byColor = new Map<string, ColorVariant[]>();
+    for (const v of variantEntries) byColor.set(v.color, [...(byColor.get(v.color) ?? []), v]);
+    return [...byColor.entries()].map(([color, list]) => {
+      const target =
+        (color === selectedColor ? list.find((v) => v._id === selectedColorVariant?._id) : undefined) ??
+        list.find((v) => v.size === selectedSize && v.stock > 0) ??
+        list.find((v) => v.stock > 0) ??
+        list[0];
+      // `stock` is the colour's total, so the swatch only reads "out of stock"
+      // when no size of that colour is available.
+      return { ...target, stock: list.reduce((sum, v) => sum + v.stock, 0) };
+    });
+  }, [variantEntries, selectedColor, selectedSize, selectedColorVariant]);
+
+  const sizeOptions = variantEntries.filter((v) => v.color === selectedColor && v.size);
+  const showSizePicker = new Set(variantEntries.map((v) => v.size).filter(Boolean)).size > 1;
+  const variantMissing = isVariable && (product.variants?.length ?? 0) > 0 && !selectedColorVariant;
+
+  // Quantity belongs to the selected option: switching colour/size starts
+  // again at 1, so a stale quantity can never exceed the new option's stock.
+  const selectionKey = selectedColorVariant?._id ?? 'product';
+  const [quantityState, setQuantityState] = useState({ key: selectionKey, value: 1 });
+  const quantity = quantityState.key === selectionKey ? quantityState.value : 1;
+  const setQuantity = (value: number) => setQuantityState({ key: selectionKey, value });
 
   // Fire view_item GA4 event once on mount
   useEffect(() => {
@@ -82,281 +108,187 @@ export default function ProductInfo({ product, selection }: ProductInfoProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product._id]);
 
-  // Wishlist hydration guard (localStorage)
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-  const isWishlisted = mounted && hasItem(product._id);
-
-  // Reset quantity when switching variants so a stale quantity can't exceed
-  // the newly selected combination's stock.
-  useEffect(() => {
-    setQuantity(1);
-  }, [selectedVariant?._id]);
-
-  const outOfStock = noMatchingVariant || activeStock === 0;
+  const outOfStock = activeStock === 0;
   const lowStock = !outOfStock && activeStock <= product.lowStockThreshold;
-
-  const PLACEHOLDER_IMG = 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 200 200%22%3E%3Crect width=%22200%22 height=%22200%22 fill=%22%23f3f4f6%22/%3E%3C/svg%3E';
-  const imgUrl = primaryImage?.url || PLACEHOLDER_IMG;
+  const cannotBuy = outOfStock || variantMissing;
 
   const handleAddToCart = async () => {
-    if (outOfStock) return;
-    if (!isAuthenticated()) {
-      toast.info('Please log in to add items to your cart.');
-      router.push(`/login?redirect=/products/${product.slug}`);
+    if (variantMissing) {
+      toast.error('Please select a colour and size');
       return;
     }
+    if (outOfStock) return;
     try {
-      await addItem(product._id, quantity, selectedVariant?._id);
+      await addItem(product._id, quantity, selectedColorVariant?._id);
       toggleDrawer();
       toast.success('Added to cart', { description: product.name });
       GA.addToCart(product, quantity);
-    } catch {
-      toast.error('Failed to add to cart. Please try again.');
+    } catch (err) {
+      toast.error(getApiError(err, 'Failed to add to cart. Please try again.').message);
     }
   };
 
-  // Buy Now must check out ONLY this product — it must never touch the
-  // user's persistent cart (adding to it would mix this purchase in with
-  // whatever else is already there, and checking out the whole cart when the
-  // user only meant to buy this one item). It builds its single line item
-  // from data already sourced from the backend (product/selectedVariant),
-  // matching exactly what /cart/add would resolve — this is only used to
-  // render the checkout page before payment; the backend re-resolves the
-  // real price/stock/variant from the DB when the order is actually created.
-  const handleBuyNow = () => {
+  const handleBuyNow = async () => {
+    if (variantMissing) {
+      toast.error('Please select a colour and size');
+      return;
+    }
     if (outOfStock) return;
-    if (!isAuthenticated()) {
-      toast.info('Please log in to continue.');
-      router.push(`/login?redirect=/products/${product.slug}`);
-      return;
-    }
-    setBuyNowItems([
-      {
-        _id: `buynow-${product._id}-${selectedVariant?._id ?? 'simple'}`,
-        productId: product._id,
-        name: product.name,
-        slug: product.slug,
-        image: imgUrl,
-        thumbnail: imgUrl,
-        sku: activeSku,
-        quantity,
-        price: activePrice,
-        originalPrice: activeOriginalPrice ?? null,
-        totalPrice: activePrice * quantity,
-        attributes: {
-          color: selectedVariant?.color?.name ?? null,
-          colorCode: selectedVariant?.color?.code ?? null,
-          size: selectedVariant?.size ?? null,
-        },
-        variant: selectedVariant?._id ?? null,
-        stock: activeStock,
-      },
-    ]);
-    router.push('/checkout?buyNow=true');
-  };
-
-  const handleWishlist = async () => {
-    if (!isAuthenticated()) {
-      toast.info('Please log in to save items to your wishlist.');
-      router.push('/login');
-      return;
-    }
-    const wasWishlisted = isWishlisted;
     try {
-      await toggleItem(product._id);
-      toast(wasWishlisted ? 'Removed from wishlist' : 'Added to wishlist');
-    } catch {
-      toast.error('Something went wrong. Please try again.');
+      await addItem(product._id, quantity, selectedColorVariant?._id);
+      router.push('/checkout');
+    } catch (err) {
+      toast.error(getApiError(err, 'Failed to add to cart. Please try again.').message);
     }
   };
 
-  const checkPincode = () => {
-    if (!/^\d{6}$/.test(pincode)) {
-      setPincodeMsg({ ok: false, text: 'Enter a valid 6-digit pincode' });
-      return;
-    }
-    const date = new Date();
-    date.setDate(date.getDate() + 5);
-    const formatted = date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
-    setPincodeMsg({ ok: true, text: `Estimated delivery by ${formatted}` });
-  };
+  // Mobile sticky purchase bar: shown once the main buttons scroll out of view.
+  const actionsRef = useRef<HTMLDivElement>(null);
+  const [actionsVisible, setActionsVisible] = useState(true);
+  useEffect(() => {
+    const el = actionsRef.current;
+    if (!el) return;
+    // Scroll listener rather than IntersectionObserver: a jump past the buttons
+    // (anchor link, restored scroll) never "crosses" the viewport edge.
+    const update = () => setActionsVisible(el.getBoundingClientRect().bottom > 0);
+    update();
+    window.addEventListener('scroll', update, { passive: true });
+    return () => window.removeEventListener('scroll', update);
+  }, []);
 
   return (
-    <div className="flex flex-col gap-5">
-      {/* Category + Brand */}
-      <div className="flex items-center gap-2 text-xs text-gray-500 uppercase tracking-wide">
-        <Link
-          href={`/products?category=${product.category.slug}`}
-          className="hover:text-primary transition-colors"
-        >
-          {product.category.name}
-        </Link>
-        {product.brand && (
-          <>
-            <span aria-hidden="true">·</span>
-            <span>{product.brand}</span>
-          </>
-        )}
-      </div>
-
-      {/* Product name */}
-      <h1 className="text-2xl md:text-3xl font-bold text-gray-900 leading-snug tracking-tight [font-family:Arial,sans-serif]">
-      {product.name}
-      </h1>
-
-      {/* Rating */}
-      {product.ratings && product.ratings.count > 0 && (
-        <a href="#reviews" className="flex items-center gap-2 w-fit group">
-          <span className="text-sm font-bold text-gray-900">{product.ratings.average.toFixed(1)}</span>
-          <StarRating rating={product.ratings.average} count={product.ratings.count} size="md" />
-          <span className="text-xs text-primary group-hover:underline">Read reviews</span>
-        </a>
-      )}
-
-      {/* Price */}
-      <PriceDisplay price={activePrice} comparePrice={activeOriginalPrice} size="lg" />
-
-      {/* Stock badge */}
+    <div className="flex flex-col gap-6">
       <div>
-        {outOfStock ? (
-          <span className="inline-block px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-700 border border-red-200">
-            Out of Stock
-          </span>
-        ) : lowStock ? (
-          <span className="inline-block px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-            Only {activeStock} left
-          </span>
-        ) : (
-          <span className="inline-block px-2.5 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200">
-            In Stock
-          </span>
-        )}
-      </div>
-
-      {/* Short description */}
-      <p className="text-gray-600 text-sm leading-relaxed">{product.shortDescription}</p>
-
-      {/* Color selector */}
-      {hasColorAxis && (
-        <ProductColorSelector
-          colors={colors}
-          selected={selectedColor}
-          onChange={setSelectedColor}
-        />
-      )}
-
-      {/* Size selector — only shown when the selected color actually has more than one size */}
-      {hasSizeAxis && (
-        <ProductVariants
-          variants={[{ name: 'Size', options: sizesForSelectedColor }]}
-          selected={{ Size: selectedSize ?? '' }}
-          onChange={(_, option) => setSelectedSize(option)}
-        />
-      )}
-
-      {noMatchingVariant && (
-        <p className="text-sm font-medium text-red-600">
-          This combination isn&apos;t available. Please choose a different size or color.
-        </p>
-      )}
-
-      {/* Quantity */}
-      {!outOfStock && (
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-medium text-gray-700">Qty:</span>
-          <QuantitySelector quantity={quantity} max={activeStock} onChange={setQuantity} />
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Link href={`/categories/${product.category.slug}`} className="hover:text-foreground hover:underline">
+            {product.category.name}
+          </Link>
+          {product.brand && (
+            <>
+              <span aria-hidden="true">·</span>
+              <span>{product.brand}</span>
+            </>
+          )}
         </div>
-      )}
 
-      {/* Add to Cart + Wishlist */}
-      <div className="flex gap-3 items-stretch">
-        <button
-          onClick={handleAddToCart}
-          disabled={outOfStock}
-          className="flex-1 flex items-center justify-center gap-2 py-3 px-6 rounded-xl border-2 border-primary bg-white text-primary font-semibold text-sm hover:bg-primary-light disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          <ShoppingCart className="w-4 h-4" />
-          Add to Cart
-        </button>
-        <button
-          onClick={handleWishlist}
-          aria-label={isWishlisted ? 'Remove from wishlist' : 'Add to wishlist'}
-          className="flex items-center justify-center w-12 rounded-xl border-2 border-gray-200 bg-white hover:border-red-300 transition-colors"
-        >
-          <Heart
-            className={`w-5 h-5 transition-colors ${
-              isWishlisted ? 'fill-red-500 text-red-500' : 'text-gray-400'
-            }`}
-          />
-        </button>
-      </div>
+        <h1 className="mt-2 text-2xl font-bold leading-tight tracking-tight text-foreground sm:text-3xl">{product.name}</h1>
 
-      {/* Buy Now */}
-      <button
-        onClick={handleBuyNow}
-        disabled={outOfStock}
-        className="w-full flex items-center justify-center gap-2 py-3 px-6 rounded-xl bg-primary text-white font-semibold text-sm hover:bg-primary-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-      >
-        <Zap className="w-4 h-4" />
-        Buy Now
-      </button>
-
-      {/* COD badge */}
-      <div className="flex items-center gap-2 text-sm text-gray-600">
-        <Shield className="w-4 h-4 text-green-600 shrink-0" />
-        <span>Cash on Delivery Available</span>
-      </div>
-
-      {/* Delivery + Pincode check */}
-      {/* <div className="border border-gray-200 rounded-xl p-4 flex flex-col gap-3 bg-gray-50">
-        <div className="flex items-center gap-2 text-sm text-gray-600">
-          <Truck className="w-4 h-4 text-primary shrink-0" />
-          <span>Free delivery on orders above ₹999</span>
-        </div>
-        <div className="flex gap-2">
-          <label className="flex items-center gap-1.5 flex-1 bg-white border border-gray-300 rounded-lg px-3 py-2 focus-within:border-primary transition-colors">
-            <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-            <input
-              type="text"
-              inputMode="numeric"
-              value={pincode}
-              onChange={(e) => {
-                setPincode(e.target.value.replace(/\D/g, '').slice(0, 6));
-                setPincodeMsg(null);
-              }}
-              onKeyDown={(e) => e.key === 'Enter' && checkPincode()}
-              placeholder="Enter pincode"
-              className="flex-1 text-sm outline-none bg-transparent placeholder-gray-400"
-              maxLength={6}
-              aria-label="Pincode"
-            />
-          </label>
-          <button
-            onClick={checkPincode}
-            className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-700 transition-colors"
+        {product.ratings && product.ratings.count > 0 && (
+          <a
+            href="#product-details"
+            onClick={() => window.dispatchEvent(new Event(SHOW_REVIEWS_EVENT))}
+            className="mt-3 inline-flex items-center gap-2 rounded-sm text-sm"
           >
-            Check
-          </button>
-        </div>
-        {pincodeMsg && (
-          <p className={`text-xs font-medium flex items-center gap-1 ${pincodeMsg.ok ? 'text-green-600' : 'text-red-600'}`}>
-            {pincodeMsg.ok && <Check className="w-3.5 h-3.5" />}
-            {pincodeMsg.text}
-          </p>
+            <StarRating rating={product.ratings.average} showValue />
+            <span className="text-primary hover:underline">
+              {product.ratings.count} review{product.ratings.count === 1 ? '' : 's'}
+            </span>
+          </a>
         )}
-      </div> */}
-
-      {/* Return policy */}
-      <div className="flex items-center gap-2 text-sm text-gray-500">
-        <RotateCcw className="w-4 h-4 shrink-0" />
-        <span>Easy 7-day returns</span>
       </div>
 
-      {/* SKU + Share */}
-      <div className="pt-4 border-t border-gray-100 flex flex-col gap-4">
-        <span className="text-xs text-gray-400">SKU: {activeSku}</span>
+      <div>
+        <PriceDisplay price={activePrice} comparePrice={activeOriginalPrice} size="lg" />
+        <p className="mt-1 text-sm text-muted-foreground">Inclusive of all taxes</p>
+        <p className={cn('mt-3 flex items-center gap-2 text-sm font-medium', outOfStock ? 'text-error' : lowStock ? 'text-warning' : 'text-success')}>
+          <span className={cn('h-2 w-2 rounded-full', outOfStock ? 'bg-error' : lowStock ? 'bg-warning' : 'bg-success')} aria-hidden="true" />
+          {outOfStock ? 'Out of stock' : lowStock ? `Only ${activeStock} left` : 'In stock'}
+        </p>
+      </div>
+
+      {product.shortDescription && <p className="text-base leading-relaxed text-muted-foreground">{product.shortDescription}</p>}
+
+      {/* Colour: legacy colorVariants, or one swatch per colour of the exact variants */}
+      {((product.colorVariants?.length ?? 0) > 0 || colorOptions.length > 0) && onColorChange && (
+        <ProductColorSelector
+          colorVariants={product.colorVariants?.length ? product.colorVariants : colorOptions}
+          selected={selectedColorVariant}
+          onChange={onColorChange}
+        />
+      )}
+
+      {/* Size: the sizes of the selected colour; out-of-stock sizes are disabled */}
+      {showSizePicker && sizeOptions.length > 0 && onColorChange && (
+        <ProductVariants
+          variants={[{ name: 'Size', options: sizeOptions.map((v) => v.size as string) }]}
+          selected={{ Size: selectedSize ?? '' }}
+          unavailable={{ Size: sizeOptions.filter((v) => v.stock < 1).map((v) => v.size as string) }}
+          onChange={(_name, size) => {
+            const exact = sizeOptions.find((v) => v.size === size);
+            if (exact) onColorChange(exact);
+          }}
+        />
+      )}
+
+      {!outOfStock && (
+        <div className="flex items-center gap-4">
+          <span className="text-sm font-medium text-foreground" id="quantity-label">
+            Quantity
+          </span>
+          <QuantitySelector quantity={quantity} max={activeStock} onChange={setQuantity} label="Quantity" />
+        </div>
+      )}
+
+      <div ref={actionsRef} className="flex flex-col gap-3">
+        <div className="flex gap-3">
+          <Button size="lg" onClick={handleAddToCart} disabled={cannotBuy} className="flex-1">
+            <ShoppingBag className="h-5 w-5" aria-hidden="true" />
+            {outOfStock ? 'Out of stock' : 'Add to cart'}
+          </Button>
+          <WishlistButton productId={product._id} variant="outline" />
+        </div>
+        <Button size="lg" variant="outline" onClick={handleBuyNow} disabled={cannotBuy} fullWidth>
+          <Zap className="h-5 w-5" aria-hidden="true" />
+          Buy now
+        </Button>
+      </div>
+
+      {/* Delivery & returns — each line matches implemented policy (see components/home/TrustStrip). */}
+      <ul className="divide-y divide-border rounded-xl border border-border bg-surface text-sm">
+        <li className="flex items-center gap-3 px-4 py-3">
+          <Truck className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <span>Free shipping on orders from {formatPrice(999)}</span>
+        </li>
+        <li className="flex items-center gap-3 px-4 py-3">
+          <Banknote className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <span>Cash on delivery on orders up to {formatPrice(10000)}</span>
+        </li>
+        <li className="flex items-center gap-3 px-4 py-3">
+          <RotateCcw className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <span>
+            7-day returns on eligible items ·{' '}
+            <Link href="/policies/returns" className="text-primary hover:underline">
+              Returns policy
+            </Link>
+          </span>
+        </li>
+      </ul>
+
+      <div className="flex flex-col gap-3 border-t border-border pt-5">
+        {activeSku && <p className="text-sm text-muted-foreground">SKU: {activeSku}</p>}
         <ProductShare product={product} />
+      </div>
+
+      {/* Mobile sticky bar, above the bottom navigation. */}
+      <div
+        className={cn(
+          'fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-30 border-t border-border bg-surface/95 px-4 py-3 backdrop-blur transition-transform duration-200 md:hidden',
+          actionsVisible ? 'pointer-events-none translate-y-[200%]' : 'translate-y-0'
+        )}
+        aria-hidden={actionsVisible}
+        inert={actionsVisible}
+      >
+        <div className="flex items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm text-muted-foreground">{product.name}</p>
+            <p className="text-base font-bold tabular-nums text-foreground">{formatPrice(activePrice)}</p>
+          </div>
+          {/* Stays enabled without a selection: handleAddToCart asks for colour/size. */}
+          <Button onClick={handleAddToCart} disabled={outOfStock} className="shrink-0">
+            <ShoppingBag className="h-4 w-4" aria-hidden="true" />
+            {outOfStock ? 'Out of stock' : variantMissing ? 'Select options' : 'Add to cart'}
+          </Button>
+        </div>
       </div>
     </div>
   );

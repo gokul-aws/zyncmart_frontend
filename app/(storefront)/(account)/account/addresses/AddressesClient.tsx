@@ -6,10 +6,15 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
-import { Plus, X, MapPin } from 'lucide-react';
+import { Plus, MapPin } from 'lucide-react';
 import { fetchUserAddresses, addAddress, updateAddress, deleteAddress, setDefaultAddress } from '@/lib/api/orders';
 import AddressCard from '@/components/account/AddressCard';
 import EmptyState from '@/components/ui/EmptyState';
+import Field from '@/components/ui/Field';
+import { Input } from '@/components/ui/Input';
+import Button from '@/components/ui/Button';
+import Skeleton from '@/components/ui/Skeleton';
+import Dialog, { ConfirmDialog } from '@/components/ui/Dialog';
 import type { Address } from '@/types/user';
 
 const schema = z.object({
@@ -67,82 +72,77 @@ export default function AddressesClient() {
     onError: () => toast.error('Could not update default'),
   });
 
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+
   const FIELDS = [
-    { name: 'name', label: 'Full Name', type: 'text', col: 2 },
-    { name: 'phone', label: 'Mobile', type: 'tel', col: 1 },
-    { name: 'line1', label: 'Address Line 1', type: 'text', col: 2 },
-    { name: 'line2', label: 'Address Line 2 (optional)', type: 'text', col: 2 },
-    { name: 'city', label: 'City', type: 'text', col: 1 },
-    { name: 'state', label: 'State', type: 'text', col: 1 },
-    { name: 'pincode', label: 'Pincode', type: 'text', col: 1 },
+    { name: 'name', label: 'Full name', type: 'text', wide: true, autoComplete: 'name', required: true },
+    { name: 'phone', label: 'Mobile number', type: 'tel', wide: false, autoComplete: 'tel-national', required: true },
+    { name: 'pincode', label: 'Pincode', type: 'text', wide: false, autoComplete: 'postal-code', required: true },
+    { name: 'line1', label: 'Address line 1', type: 'text', wide: true, autoComplete: 'address-line1', required: true },
+    { name: 'line2', label: 'Address line 2', type: 'text', wide: true, autoComplete: 'address-line2', required: false },
+    { name: 'city', label: 'City', type: 'text', wide: false, autoComplete: 'address-level2', required: true },
+    { name: 'state', label: 'State', type: 'text', wide: false, autoComplete: 'address-level1', required: true },
   ] as const;
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-gray-900">My Addresses</h1>
-        <button
-          onClick={openAdd}
-          className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors"
-        >
-          <Plus className="w-4 h-4" /> Add Address
-        </button>
+      <div className="flex items-center justify-between gap-4">
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">My addresses</h1>
+        <Button onClick={openAdd}>
+          <Plus className="h-4 w-4" aria-hidden="true" />
+          Add address
+        </Button>
       </div>
 
-      {/* Form */}
-      {showForm && (
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="font-semibold text-gray-900">{editing ? 'Edit Address' : 'New Address'}</h2>
-            <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-700">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-          <form onSubmit={handleSubmit((d) => saveMutation.mutate(d))} className="grid grid-cols-2 gap-4" noValidate>
-            {FIELDS.map((f) => (
-              <div key={f.name} className={f.col === 2 ? 'col-span-2' : ''}>
-                <label className="block text-xs font-medium text-gray-600 mb-1">{f.label}</label>
-                <input
-                  {...register(f.name)}
-                  type={f.type}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                />
-                {errors[f.name] && <p className="mt-0.5 text-xs text-error">{errors[f.name]?.message}</p>}
-              </div>
-            ))}
-            <div className="col-span-2 flex justify-end gap-2 pt-1">
-              <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg hover:bg-gray-50">
-                Cancel
-              </button>
-              <button type="submit" disabled={saveMutation.isPending} className="px-4 py-2 text-sm font-medium bg-primary text-white rounded-lg hover:bg-primary-dark disabled:opacity-60">
-                {saveMutation.isPending ? 'Saving…' : 'Save Address'}
-              </button>
-            </div>
-          </form>
-        </div>
+      {isLoading && <Skeleton className="h-36 rounded-xl" />}
+
+      {!isLoading && addresses.length === 0 && (
+        <EmptyState compact title="No saved addresses" description="Add an address to speed up checkout." icon={<MapPin />} />
       )}
 
-      {isLoading && <div className="h-32 bg-gray-100 rounded-xl animate-pulse" />}
-
-      {!isLoading && addresses.length === 0 && !showForm && (
-        <EmptyState
-          title="No addresses saved"
-          description="Add an address to speed up checkout."
-          icon={<MapPin className="w-12 h-12" />}
-        />
-      )}
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {addresses.map((addr) => (
-          <AddressCard
-            key={addr._id}
-            address={addr}
-            onEdit={openEdit}
-            onDelete={(id) => deleteMutation.mutate(id)}
-            onSetDefault={(id) => defaultMutation.mutate(id)}
-          />
+          <li key={addr._id}>
+            <AddressCard address={addr} onEdit={openEdit} onDelete={(id) => setPendingDelete(id)} onSetDefault={(id) => defaultMutation.mutate(id)} />
+          </li>
         ))}
-      </div>
+      </ul>
+
+      <Dialog
+        open={showForm}
+        onClose={() => setShowForm(false)}
+        title={editing ? 'Edit address' : 'New address'}
+        size="lg"
+        footer={
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button variant="outline" onClick={() => setShowForm(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" form="address-form" loading={saveMutation.isPending}>
+              Save address
+            </Button>
+          </div>
+        }
+      >
+        <form id="address-form" onSubmit={handleSubmit((d) => saveMutation.mutate(d))} className="grid grid-cols-1 gap-4 sm:grid-cols-2" noValidate>
+          {FIELDS.map((f) => (
+            <Field key={f.name} label={f.label} required={f.required} hint={f.required ? undefined : 'Optional'} error={errors[f.name]?.message} className={f.wide ? 'sm:col-span-2' : ''}>
+              <Input {...register(f.name)} type={f.type} autoComplete={f.autoComplete} inputMode={f.name === 'phone' || f.name === 'pincode' ? 'numeric' : undefined} />
+            </Field>
+          ))}
+        </form>
+      </Dialog>
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="Delete this address?"
+        description="You can add it again later."
+        confirmLabel="Delete address"
+        destructive
+        loading={deleteMutation.isPending}
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={() => pendingDelete && deleteMutation.mutate(pendingDelete, { onSettled: () => setPendingDelete(null) })}
+      />
     </div>
   );
 }

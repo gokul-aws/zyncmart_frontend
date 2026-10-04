@@ -5,9 +5,14 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { MapPin, Plus, Loader2, Truck } from 'lucide-react';
+import Field from '@/components/ui/Field';
+import { Input, Select, RadioCard } from '@/components/ui/Input';
+import Button from '@/components/ui/Button';
+import Badge from '@/components/ui/Badge';
+import Spinner from '@/components/ui/Spinner';
 import { useAuthStore } from '@/lib/store/authStore';
 import { fetchUserAddresses } from '@/lib/api/orders';
-import { validatePincode, lookupPincodeState, calculateShippingCharge } from '@/lib/shipping';
+import { validatePincode, lookupPincodeState } from '@/lib/shipping';
 import { formatPrice } from '@/lib/formatters';
 import type { Address } from '@/types/user';
 
@@ -34,12 +39,14 @@ type AddressFormValues = z.infer<typeof addressSchema>;
 
 interface AddressStepProps {
   onContinue: (address: Address) => void;
-  onShippingChange: (shipping: { pincode: string; state: string; shippingCharge: number }) => void;
+  /** Reports the delivery state/pincode so the parent can fetch the server quote. */
+  onShippingChange: (destination: { pincode: string; state: string }) => void;
   initialPincode?: string;
-  subtotal: number;
+  /** Shipping from the server quote for the current state (null while unknown). */
+  quotedShipping?: number | null;
 }
 
-export default function AddressStep({ onContinue, onShippingChange, initialPincode, subtotal }: AddressStepProps) {
+export default function AddressStep({ onContinue, onShippingChange, initialPincode, quotedShipping = null }: AddressStepProps) {
   const user = useAuthStore((s) => s.user);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
@@ -100,49 +107,30 @@ export default function AddressStep({ onContinue, onShippingChange, initialPinco
 
       if (state) {
         setValue('state', state, { shouldValidate: true });
+        onShippingChange({ pincode: pincodeValue, state });
       } else {
         setPincodeError('Could not detect state. Please select manually.');
+        onShippingChange({ pincode: pincodeValue, state: '' });
       }
     });
 
     return () => {
       cancelled = true;
     };
-  }, [pincodeValue, setValue]);
-
-  // Recompute the shipping estimate whenever the pincode, detected/selected
-  // state, or cart subtotal changes — subtotal affects the free-shipping
-  // threshold, so it must trigger a recompute without re-hitting the pincode
-  // lookup API.
-  useEffect(() => {
-    if (!validatePincode(pincodeValue)) return;
-    onShippingChange({
-      pincode: pincodeValue,
-      state: stateValue ?? '',
-      shippingCharge: calculateShippingCharge(stateValue ?? '', subtotal),
-    });
-  }, [pincodeValue, stateValue, subtotal, onShippingChange]);
+  }, [pincodeValue, setValue, onShippingChange]);
 
   const handleContinue = () => {
     if (showForm) return; // handled by form submit
     const address = savedAddresses.find((a) => a._id === selectedId);
     if (address) {
-      onShippingChange({
-        pincode: address.pincode,
-        state: address.state,
-        shippingCharge: calculateShippingCharge(address.state, subtotal),
-      });
+      onShippingChange({ pincode: address.pincode, state: address.state });
       onContinue(address);
     }
   };
 
   const onFormSubmit = (values: AddressFormValues) => {
     const address: Address = { ...values };
-    onShippingChange({
-      pincode: values.pincode,
-      state: values.state,
-      shippingCharge: calculateShippingCharge(values.state, subtotal),
-    });
+    onShippingChange({ pincode: values.pincode, state: values.state });
     onContinue(address);
   };
 
@@ -152,183 +140,132 @@ export default function AddressStep({ onContinue, onShippingChange, initialPinco
     setSelectedId(null);
   };
 
+  const errorList = Object.entries(errors).filter(([, e]) => e?.message) as [keyof AddressFormValues, { message?: string }][];
+  const FIELD_LABELS: Record<keyof AddressFormValues, string> = {
+    name: 'Full name', phone: 'Mobile number', line1: 'Address line 1', line2: 'Address line 2', city: 'City', state: 'State', pincode: 'Pincode',
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <Loader2 className="w-6 h-6 animate-spin text-primary" />
+        <Spinner label="Loading your addresses" />
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-        <MapPin className="w-5 h-5 text-primary" />
-        Delivery Address
+      <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
+        <MapPin className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+        Delivery address
       </h2>
 
       {/* Saved addresses */}
       {savedAddresses.length > 0 && !showForm && (
         <div className="space-y-3">
-          {savedAddresses.map((addr) => (
-            <label
-              key={addr._id}
-              className={`flex gap-3 p-4 rounded-xl border-2 cursor-pointer transition-colors ${
-                selectedId === addr._id
-                  ? 'border-primary bg-primary/5'
-                  : 'border-gray-200 hover:border-gray-300'
-              }`}
-            >
-              <input
-                type="radio"
+          <fieldset className="space-y-3">
+            <legend className="sr-only">Choose a saved address</legend>
+            {savedAddresses.map((addr) => (
+              <RadioCard
+                key={addr._id}
                 name="address"
                 value={addr._id}
                 checked={selectedId === addr._id}
                 onChange={() => setSelectedId(addr._id!)}
-                className="mt-1 accent-primary"
-              />
-              <div className="text-sm text-gray-700 leading-relaxed">
-                <p className="font-semibold text-gray-900">{addr.name}</p>
-                <p>{addr.phone}</p>
-                <p>
-                  {addr.line1}
-                  {addr.line2 ? `, ${addr.line2}` : ''}
-                </p>
-                <p>
-                  {addr.city}, {addr.state} — {addr.pincode}
-                </p>
-                {addr.isDefault && (
-                  <span className="inline-block mt-1 text-xs font-medium text-primary bg-primary/10 rounded px-1.5 py-0.5">
-                    Default
-                  </span>
-                )}
-              </div>
-            </label>
-          ))}
+              >
+                <div className="text-sm leading-relaxed text-muted-foreground">
+                  <p className="flex flex-wrap items-center gap-2 font-semibold text-foreground">
+                    {addr.name}
+                    {addr.isDefault && <Badge variant="neutral">Default</Badge>}
+                  </p>
+                  <p>{addr.phone}</p>
+                  <p>
+                    {addr.line1}
+                    {addr.line2 ? `, ${addr.line2}` : ''}
+                  </p>
+                  <p>
+                    {addr.city}, {addr.state} — {addr.pincode}
+                  </p>
+                </div>
+              </RadioCard>
+            ))}
+          </fieldset>
 
-          <button
-            type="button"
-            onClick={handleAddNew}
-            className="flex items-center gap-1.5 text-sm text-primary font-medium hover:underline"
-          >
-            <Plus className="w-4 h-4" />
-            Add new address
-          </button>
+          <Button variant="link" onClick={handleAddNew}>
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            Add a new address
+          </Button>
 
-          <button
-            type="button"
-            disabled={!selectedId}
-            onClick={handleContinue}
-            className="w-full py-3 rounded-xl bg-primary text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary-dark transition-colors"
-          >
-            Continue to Payment
-          </button>
+          <Button size="lg" fullWidth disabled={!selectedId} onClick={handleContinue}>
+            Continue to payment
+          </Button>
         </div>
       )}
 
       {/* New address form */}
       {showForm && (
-        <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-4">
+        <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-5" noValidate>
           {savedAddresses.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setShowForm(false)}
-              className="text-sm text-gray-500 hover:text-gray-700 underline"
-            >
+            <button type="button" onClick={() => setShowForm(false)} className="text-sm font-medium text-primary hover:underline">
               ← Back to saved addresses
             </button>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Full Name <span className="text-red-500">*</span>
-              </label>
-              <input
-                {...register('name')}
-                placeholder="Rahul Sharma"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-              />
-              {errors.name && (
-                <p className="mt-1 text-xs text-red-500">{errors.name.message}</p>
-              )}
+          {errorList.length > 1 && (
+            <div role="alert" className="rounded-xl border border-error/20 bg-error-subtle p-4 text-sm">
+              <p className="font-semibold text-error">Please fix {errorList.length} fields:</p>
+              <ul className="mt-1 list-disc pl-5 text-foreground">
+                {errorList.map(([field, e]) => (
+                  <li key={field}>
+                    <a href={`#address-${field}`} className="underline">
+                      {FIELD_LABELS[field]}
+                    </a>
+                    : {e.message}
+                  </li>
+                ))}
+              </ul>
             </div>
+          )}
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Mobile Number <span className="text-red-500">*</span>
-              </label>
-              <input
-                {...register('phone')}
-                type="tel"
-                placeholder="9876543210"
-                maxLength={10}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-              />
-              {errors.phone && (
-                <p className="mt-1 text-xs text-red-500">{errors.phone.message}</p>
-              )}
-            </div>
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <Field label="Full name" required error={errors.name?.message} id="address-name">
+              <Input {...register('name')} autoComplete="name" />
+            </Field>
+            <Field label="Mobile number" required error={errors.phone?.message} hint="10-digit Indian mobile number" id="address-phone">
+              <Input {...register('phone')} type="tel" inputMode="numeric" autoComplete="tel-national" maxLength={10} />
+            </Field>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Address Line 1 <span className="text-red-500">*</span>
-            </label>
-            <input
-              {...register('line1')}
-              placeholder="House no., Street, Area"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-            />
-            {errors.line1 && (
-              <p className="mt-1 text-xs text-red-500">{errors.line1.message}</p>
-            )}
-          </div>
+          <Field label="Address line 1" required error={errors.line1?.message} hint="House no., street, area" id="address-line1">
+            <Input {...register('line1')} autoComplete="address-line1" />
+          </Field>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Address Line 2
-              <span className="ml-1 text-gray-400 font-normal">(optional)</span>
-            </label>
-            <input
-              {...register('line2')}
-              placeholder="Landmark, Colony (optional)"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-            />
-          </div>
+          <Field label="Address line 2" hint="Landmark, colony (optional)" id="address-line2">
+            <Input {...register('line2')} autoComplete="address-line2" />
+          </Field>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                City <span className="text-red-500">*</span>
-              </label>
-              <input
-                {...register('city')}
-                placeholder="Mumbai"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-              />
-              {errors.city && (
-                <p className="mt-1 text-xs text-red-500">{errors.city.message}</p>
-              )}
-            </div>
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+            <Field label="Pincode" required error={errors.pincode?.message} hint={pincodeError || undefined} id="address-pincode">
+              <div className="relative">
+                <Input {...register('pincode')} type="text" inputMode="numeric" autoComplete="postal-code" maxLength={6} />
+                {pincodeLoading && <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" aria-hidden="true" />}
+              </div>
+            </Field>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                State <span className="text-red-500">*</span>
-              </label>
-              <select
+            <Field label="City" required error={errors.city?.message} id="address-city">
+              <Input {...register('city')} autoComplete="address-level2" />
+            </Field>
+
+            <Field label="State" required error={errors.state?.message} id="address-state">
+              <Select
                 {...register('state')}
+                autoComplete="address-level1"
                 onChange={(e) => {
                   register('state').onChange(e);
                   if (validatePincode(pincodeValue)) {
-                    onShippingChange({
-                      pincode: pincodeValue,
-                      state: e.target.value,
-                      shippingCharge: calculateShippingCharge(e.target.value, subtotal),
-                    });
+                    onShippingChange({ pincode: pincodeValue, state: e.target.value });
                   }
                 }}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent bg-white"
               >
                 <option value="">Select state</option>
                 {INDIAN_STATES.map((s) => (
@@ -336,56 +273,23 @@ export default function AddressStep({ onContinue, onShippingChange, initialPinco
                     {s}
                   </option>
                 ))}
-              </select>
-              {errors.state && (
-                <p className="mt-1 text-xs text-red-500">{errors.state.message}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Pincode <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <input
-                  {...register('pincode')}
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="400001"
-                  maxLength={6}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                />
-                {pincodeLoading && (
-                  <Loader2 className="w-4 h-4 animate-spin text-primary absolute right-3 top-1/2 -translate-y-1/2" />
-                )}
-              </div>
-              {errors.pincode && (
-                <p className="mt-1 text-xs text-red-500">{errors.pincode.message}</p>
-              )}
-              {pincodeError && !errors.pincode && (
-                <p className="mt-1 text-xs text-red-500">{pincodeError}</p>
-              )}
-              {pincodeValue && validatePincode(pincodeValue) && !pincodeLoading && !pincodeError && stateValue && (
-                <div className="mt-2 flex items-center gap-2 text-sm text-gray-600">
-                  <Truck className="w-4 h-4 text-primary shrink-0" />
-                  <span>
-                    Shipping: <span className="font-semibold text-gray-900">{formatPrice(calculateShippingCharge(stateValue, subtotal))}</span>
-                    {' • '}
-                    <span className="text-gray-500">{stateValue}</span>
-                  </span>
-                </div>
-              )}
-            </div>
+              </Select>
+            </Field>
           </div>
 
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full py-3 rounded-xl bg-primary text-white font-semibold disabled:opacity-50 hover:bg-primary-dark transition-colors flex items-center justify-center gap-2"
-          >
-            {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-            Continue to Payment
-          </button>
+          {pincodeValue && validatePincode(pincodeValue) && !pincodeLoading && !pincodeError && stateValue && (
+            <p className="flex items-center gap-2 text-sm text-muted-foreground" aria-live="polite">
+              <Truck className="h-4 w-4 shrink-0" aria-hidden="true" />
+              Shipping to {stateValue}:{' '}
+              <span className="font-semibold text-foreground">
+                {quotedShipping === null ? 'Calculating…' : quotedShipping === 0 ? 'Free' : formatPrice(quotedShipping)}
+              </span>
+            </p>
+          )}
+
+          <Button type="submit" size="lg" fullWidth loading={isSubmitting}>
+            Continue to payment
+          </Button>
         </form>
       )}
     </div>

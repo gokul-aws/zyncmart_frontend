@@ -26,6 +26,7 @@ const PAYMENT_STATUSES = [
   { value: 'pending', label: 'Pending' },
   { value: 'paid', label: 'Paid' },
   { value: 'failed', label: 'Failed' },
+  { value: 'refund_pending', label: 'Refund pending' },
   { value: 'refunded', label: 'Refunded' },
 ] as const;
 
@@ -95,10 +96,10 @@ function OrdersPageContent() {
         </button>
       }
     >
-      <div className="grid gap-4 lg:grid-cols-[1fr_auto]">
+      <div className="grid gap-4 [&>*]:min-w-0 lg:grid-cols-[1fr_auto]">
         <form onSubmit={handleSearchSubmit} className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="relative flex-1">
-            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle-foreground" />
             <input
               name="search"
               defaultValue={search}
@@ -123,7 +124,7 @@ function OrdersPageContent() {
         </button>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[220px_1fr]">
+      <div className="grid gap-4 [&>*]:min-w-0 lg:grid-cols-[220px_1fr]">
         <aside className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-950">
           <div className="space-y-4">
             <div>
@@ -132,8 +133,8 @@ function OrdersPageContent() {
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">Status</label>
-              <select
+              <label htmlFor="fld-page-status" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">Status</label>
+              <select id="fld-page-status"
                 value={status}
                 onChange={(event) => handleQueryUpdate({ status: event.target.value || undefined, page: '1' })}
                 className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
@@ -148,8 +149,8 @@ function OrdersPageContent() {
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">Payment</label>
-              <select
+              <label htmlFor="fld-page-payment" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">Payment</label>
+              <select id="fld-page-payment"
                 value={paymentStatus}
                 onChange={(event) => handleQueryUpdate({ paymentStatus: event.target.value || undefined, page: '1' })}
                 className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
@@ -170,7 +171,7 @@ function OrdersPageContent() {
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{totalItems} orders</p>
-                <p className="text-xs text-slate-400 dark:text-slate-500">Showing page {page} of {totalPages || 1}</p>
+                <p className="text-xs text-subtle-foreground dark:text-slate-500">Showing page {page} of {totalPages || 1}</p>
               </div>
               <div className="flex flex-wrap items-center gap-3">
                 <Badge variant="default">Page size: {DEFAULT_PAGE_SIZE}</Badge>

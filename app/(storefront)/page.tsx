@@ -1,13 +1,10 @@
 import type { Metadata } from 'next';
 import HeroBanner from '@/components/home/HeroBanner';
+import TrustStrip from '@/components/home/TrustStrip';
 import FeaturedCategories from '@/components/home/FeaturedCategories';
-import NewArrivals from '@/components/home/NewArrivals';
-import BestSellers from '@/components/home/BestSellers';
-import FeaturedProducts from '@/components/home/FeaturedProducts';
-import OfferBanner from '@/components/home/OfferBanner';
-import Testimonials from '@/components/home/Testimonials';
+import ProductCarousel from '@/components/home/ProductCarousel';
 import { fetchCategories } from '@/lib/api/categories';
-import { fetchProducts, fetchNewArrivals, fetchBestSellers } from '@/lib/api/products';
+import { fetchNewArrivals, fetchBestSellers } from '@/lib/api/products';
 import type { Category } from '@/types/category';
 import type { Product } from '@/types/product';
 
@@ -40,47 +37,30 @@ export const metadata: Metadata = {
 
 export default async function HomePage() {
   let categories: Category[] = [];
-  let featuredProducts: Product[] = [];
   let newArrivals: Product[] = [];
-  let bestSellers: Product[] = [];
+  let topRated: Product[] = [];
 
   try {
-    const [categoriesRes, featuredRes, newArrivalsRes, bestSellersRes] = await Promise.all([
+    const [categoriesRes, newArrivalsRes, topRatedRes] = await Promise.all([
       fetchCategories(),
-      fetchProducts({ isFeatured: true, limit: 10 }),
       fetchNewArrivals(),
+      // Sorted by rating (not sales), so it is labelled "Top rated".
       fetchBestSellers(),
     ]);
     categories = categoriesRes.data ?? [];
-    featuredProducts = featuredRes.data ?? [];
     newArrivals = newArrivalsRes.data ?? [];
-    bestSellers = bestSellersRes.data ?? [];
+    topRated = topRatedRes.data ?? [];
   } catch {
     // API unreachable during build — sections render empty until revalidation
   }
 
   return (
-    <div>
-      {/* 1. Hero banner */}
-      <HeroBanner />
-
-      {/* 2. Category carousel */}
+    <>
+      <HeroBanner categories={categories} />
+      <TrustStrip />
       <FeaturedCategories categories={categories} />
-
-      {/* 3. New Arrivals */}
-      <NewArrivals products={newArrivals} />
-
-      {/* 4. Promotional strip */}
-      <OfferBanner />
-
-      {/* 5. Best Sellers */}
-      <BestSellers products={bestSellers} />
-
-      {/* 6. Featured products (2-row horizontal scroll) */}
-      {/* <FeaturedProducts products={featuredProducts} /> */}
-
-      {/* 7. Social proof */}
-      <Testimonials />
-    </div>
+      <ProductCarousel title="New arrivals" products={newArrivals} viewAllHref="/products?sortBy=newest" tinted />
+      <ProductCarousel title="Top rated" products={topRated} viewAllHref="/products?sortBy=rating" />
+    </>
   );
 }

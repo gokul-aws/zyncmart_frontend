@@ -2,192 +2,155 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { ShoppingCart, User, Search, Heart, Menu, X } from 'lucide-react';
+import { usePathname } from 'next/navigation';
+import { ShoppingBag, User, Search, Heart, LayoutDashboard, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useCartStore } from '@/lib/store/cartStore';
-import { useWishlistStore } from '@/lib/store/wishlistStore';
 import { useAuthStore } from '@/lib/store/authStore';
+import { useCategories } from '@/hooks/useCategories';
+import { useHydrated } from '@/lib/useHydrated';
+import { cn } from '@/lib/utils';
+import IconButton from '@/components/ui/IconButton';
 import HeaderSearchPanel from './HeaderSearchPanel';
 
-const NAV_LINKS = [
-  { label: 'Home', href: '/' },
-  { label: 'All Products', href: '/products' },
-  { label: 'About Us', href: '/about' },
-  { label: 'Contact Us', href: '/contact' },
-];
+const MAX_NAV_CATEGORIES = 4;
+
+// No display utility here: each link sets its own (inline-flex / hidden …)
+// so responsive visibility never conflicts.
+const ICON_LINK =
+  'relative h-11 w-11 shrink-0 items-center justify-center rounded-full text-white/80 transition-colors hover:bg-white/10 hover:text-white';
 
 function ZyncmartLogo() {
+  // The logo artwork has wide transparent margins; object-cover in a
+  // fixed box crops them so the wordmark reads at a sensible size.
   return (
-    <Link href="/" className="flex items-center shrink-0" aria-label="Zyncmart — Home">
-      <Image
-        src="/zyncmart_logo.png"
-        alt="Zyncmart"
-        width={779}
-        height={320}
-        priority
-        className="h-8 sm:h-10 md:h-12 lg:h-14 w-auto object-contain"
-      />
+    <Link href="/" className="relative block h-8 w-[136px] shrink-0 sm:h-9 sm:w-[156px]" aria-label="Zyncmart home">
+      <Image src="/zyncmart_logo.png" alt="" fill priority sizes="160px" className="object-cover" />
     </Link>
   );
 }
 
 export default function Header() {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  // Remounting the panel after it closes gives the next search a clean state.
+  const [panelKey, setPanelKey] = useState(0);
   const headerRef = useRef<HTMLElement>(null);
+  const desktopTriggerRef = useRef<HTMLButtonElement>(null);
+  const mobileTriggerRef = useRef<HTMLButtonElement>(null);
+  const pathname = usePathname();
+  const hydrated = useHydrated();
 
-  const itemCount = useCartStore((state) =>
-    state.items.reduce((sum, item) => sum + item.quantity, 0)
-  );
+  const itemCount = useCartStore((state) => state.items.reduce((sum, item) => sum + item.quantity, 0));
   const toggleCartDrawer = useCartStore((state) => state.toggleDrawer);
-  const wishlistCount = useWishlistStore((state) => state.items.length);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated());
   const isAdmin = useAuthStore((state) => state.user?.role === 'admin');
+  const { data: categories = [] } = useCategories();
+  const navCategories = categories.filter((c) => c.isActive && !c.parent).slice(0, MAX_NAV_CATEGORIES);
 
-  const closeSearch = useCallback(() => setSearchOpen(false), []);
+  const closeSearch = useCallback(() => {
+    setSearchOpen(false);
+    setPanelKey((k) => k + 1);
+  }, []);
+  const toggleSearch = () => (searchOpen ? closeSearch() : setSearchOpen(true));
+  // Escape: close and put focus back on whichever trigger is visible.
+  const escapeSearch = useCallback(() => {
+    closeSearch();
+    const trigger = [desktopTriggerRef.current, mobileTriggerRef.current].find((el) => el && el.offsetParent !== null);
+    trigger?.focus();
+  }, [closeSearch]);
 
-  // Close search on click outside the entire header
+  // Close the search panel when clicking anywhere outside the header.
   useEffect(() => {
     if (!searchOpen) return;
     const handlePointerDown = (e: PointerEvent) => {
-      if (headerRef.current && !headerRef.current.contains(e.target as Node)) {
-        setSearchOpen(false);
-      }
+      if (headerRef.current && !headerRef.current.contains(e.target as Node)) closeSearch();
     };
     document.addEventListener('pointerdown', handlePointerDown);
     return () => document.removeEventListener('pointerdown', handlePointerDown);
-  }, [searchOpen]);
+  }, [searchOpen, closeSearch]);
 
-  // Close search when route changes (navigation)
-  useEffect(() => {
-    setSearchOpen(false);
-    setMobileMenuOpen(false);
-  }, []);
+  const cartCount = hydrated ? itemCount : 0;
+  const signedIn = hydrated && isAuthenticated;
+  const navLink = (href: string) =>
+    cn(
+      'rounded-md px-3 py-2 text-sm font-medium transition-colors',
+      pathname === href ? 'text-white' : 'text-white/75 hover:text-white'
+    );
 
   return (
-    <header
-      ref={headerRef}
-      className="sticky top-0 z-40 bg-secondary shadow-lg shadow-secondary/20"
-    >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          <ZyncmartLogo />
+    <header ref={headerRef} className="sticky top-0 z-40 bg-ink">
+      <div className="mx-auto flex h-14 max-w-7xl items-center gap-4 px-4 sm:h-16 sm:px-6 lg:px-8">
+        <ZyncmartLogo />
 
-          {/* Desktop nav */}
-          <nav className="hidden md:flex items-center gap-1" aria-label="Main navigation">
-            {NAV_LINKS.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="px-3 py-2 text-sm text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-              >
-                {link.label}
+        {/* Desktop: shop navigation from the real category list */}
+        <nav className="hidden items-center lg:flex" aria-label="Shop">
+          <Link href="/products" className={navLink('/products')} aria-current={pathname === '/products' ? 'page' : undefined}>
+            All products
+          </Link>
+          {navCategories.map((cat) => {
+            const href = `/categories/${cat.slug}`;
+            return (
+              <Link key={cat._id} href={href} className={navLink(href)} aria-current={pathname === href ? 'page' : undefined}>
+                {cat.name}
               </Link>
-            ))}
-            {isAdmin && (
-              <Link
-                href="/admin/dashboard"
-                className="px-3 py-2 text-sm text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-              >
-                Admin Panel
-              </Link>
-            )}
-          </nav>
+            );
+          })}
+        </nav>
 
-          {/* Action icons */}
-          <div className="flex items-center gap-0.5">
-            {/* Search toggle button */}
-            <button
-              onClick={() => setSearchOpen((v) => !v)}
-              aria-label={searchOpen ? 'Close search' : 'Open search'}
-              aria-expanded={searchOpen}
-              aria-controls="header-search-panel"
-              className={`p-2 rounded-full transition-colors ${
-                searchOpen
-                  ? 'text-white bg-white/15'
-                  : 'text-white/70 hover:text-white hover:bg-white/10'
-              }`}
-            >
-              {searchOpen ? <X className="w-5 h-5" /> : <Search className="w-5 h-5" />}
-            </button>
+        <div className="ml-auto flex items-center gap-1">
+          {/* md+: search reads as a field; opens the live-search panel */}
+          <button
+            ref={desktopTriggerRef}
+            type="button"
+            onClick={toggleSearch}
+            aria-expanded={searchOpen}
+            aria-controls="header-search-panel"
+            className="mr-2 hidden h-10 w-56 items-center gap-2 rounded-lg bg-white/10 px-3 text-sm text-white/75 transition-colors hover:bg-white/15 md:flex xl:w-72"
+          >
+            <Search className="h-4 w-4" aria-hidden="true" />
+            Search products…
+          </button>
+          <IconButton
+            label={searchOpen ? 'Close search' : 'Search products'}
+            ref={mobileTriggerRef}
+            variant="on-dark"
+            onClick={toggleSearch}
+            aria-expanded={searchOpen}
+            aria-controls="header-search-panel"
+            className="md:hidden"
+          >
+            {searchOpen ? <X className="h-5 w-5" aria-hidden="true" /> : <Search className="h-5 w-5" aria-hidden="true" />}
+          </IconButton>
 
-            <Link
-              href="/account/wishlist"
-              aria-label={`Wishlist — ${wishlistCount} item${wishlistCount !== 1 ? 's' : ''}`}
-              className="relative flex p-2 text-white/70 hover:text-white rounded-full hover:bg-white/10 transition-colors"
-            >
-              <Heart className="w-5 h-5" />
-              {wishlistCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 bg-accent text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
-                  {wishlistCount > 99 ? '99+' : wishlistCount}
-                </span>
-              )}
-            </Link>
-
-            {/* Cart lives in the mobile bottom nav below md; keep it here for desktop only */}
-            <button
-              onClick={toggleCartDrawer}
-              aria-label={`Cart — ${itemCount} item${itemCount !== 1 ? 's' : ''}`}
-              className="relative hidden md:flex p-2 text-white/70 hover:text-white rounded-full hover:bg-white/10 transition-colors"
-            >
-              <ShoppingCart className="w-5 h-5" />
-              {itemCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 bg-accent text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
-                  {itemCount > 99 ? '99+' : itemCount}
-                </span>
-              )}
-            </button>
-
-            <Link
-              href={isAuthenticated ? '/account' : '/login'}
-              aria-label="Account"
-              className="p-2 text-white/70 hover:text-white rounded-full hover:bg-white/10 transition-colors"
-              suppressHydrationWarning
-            >
-              <User className="w-5 h-5" />
-            </Link>
-
-            {/* Mobile menu toggle */}
-            <button
-              className="md:hidden p-2 text-white/70 hover:text-white rounded-full hover:bg-white/10 transition-colors"
-              aria-label="Toggle menu"
-              onClick={() => setMobileMenuOpen((v) => !v)}
-            >
-              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Search panel (animated slide-down) */}
-      <div id="header-search-panel">
-        <HeaderSearchPanel isOpen={searchOpen} onClose={closeSearch} />
-      </div>
-
-      {/* Mobile nav menu */}
-      {mobileMenuOpen && (
-        <div className="md:hidden border-t border-white/10 bg-secondary/95 backdrop-blur-sm px-4 py-3 space-y-0.5">
-          {NAV_LINKS.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="flex items-center py-2.5 px-2 text-sm text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              {link.label}
-            </Link>
-          ))}
-          {isAdmin && (
-            <Link
-              href="/admin/dashboard"
-              className="flex items-center py-2.5 px-2 text-sm text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              Admin Panel
+          {hydrated && isAdmin && (
+            <Link href="/admin/dashboard" className={cn(ICON_LINK, 'inline-flex')} aria-label="Admin panel" title="Admin panel">
+              <LayoutDashboard className="h-5 w-5" aria-hidden="true" />
             </Link>
           )}
+
+          <Link href="/account/wishlist" className={cn(ICON_LINK, 'hidden sm:inline-flex')} aria-label="Wishlist">
+            <Heart className="h-5 w-5" aria-hidden="true" />
+          </Link>
+
+          {/* Mobile has Account in the bottom navigation. */}
+          <Link href={signedIn ? '/account' : '/login'} className={cn(ICON_LINK, 'hidden md:inline-flex')} aria-label={signedIn ? 'Your account' : 'Sign in'}>
+            <User className="h-5 w-5" aria-hidden="true" />
+          </Link>
+
+          <IconButton label={`Cart, ${cartCount} item${cartCount === 1 ? '' : 's'}`} variant="on-dark" onClick={toggleCartDrawer} className="relative">
+            <ShoppingBag className="h-5 w-5" aria-hidden="true" />
+            {cartCount > 0 && (
+              <span className="absolute right-1 top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1 text-xs font-bold tabular-nums leading-none text-white" aria-hidden="true">
+                {cartCount > 99 ? '99+' : cartCount}
+              </span>
+            )}
+          </IconButton>
         </div>
-      )}
+      </div>
+
+      <div id="header-search-panel">
+        <HeaderSearchPanel key={panelKey} isOpen={searchOpen} onClose={closeSearch} onEscape={escapeSearch} />
+      </div>
     </header>
   );
 }

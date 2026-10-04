@@ -1,105 +1,79 @@
 'use client';
 
-import { useRef, useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import Link from 'next/link';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { Product } from '@/types/product';
 import ProductCard from '@/components/product/ProductCard';
+import IconButton from '@/components/ui/IconButton';
 
 interface ProductCarouselProps {
+  title: string;
   products: Product[];
+  viewAllHref: string;
+  /** Muted band behind the section. */
+  tinted?: boolean;
 }
 
-export function ProductCarouselSkeleton() {
-  return (
-    <div className="flex gap-4 overflow-hidden">
-      {Array.from({ length: 5 }).map((_, i) => (
-        <div key={i} className="flex-none w-[165px] sm:w-[200px] rounded-xl overflow-hidden border border-gray-100 bg-white animate-pulse">
-          <div className="aspect-[4/5] bg-gray-200" />
-          <div className="p-3 space-y-2">
-            <div className="h-2.5 bg-gray-200 rounded w-1/3" />
-            <div className="h-4 bg-gray-200 rounded w-4/5" />
-            <div className="h-4 bg-gray-200 rounded w-1/2" />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
+/** Horizontal product rail: swipe on touch, arrow buttons (always visible) on larger screens. */
+export default function ProductCarousel({ title, products, viewAllHref, tinted = false }: ProductCarouselProps) {
+  const scrollRef = useRef<HTMLUListElement>(null);
+  const headingId = useId();
+  const [edges, setEdges] = useState({ start: true, end: false });
 
-export default function ProductCarousel({ products }: ProductCarouselProps) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(false);
-
-  const updateArrows = useCallback(() => {
+  const measure = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
-    setCanScrollLeft(el.scrollLeft > 4);
-    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 4);
+    setEdges({ start: el.scrollLeft <= 4, end: el.scrollLeft >= el.scrollWidth - el.clientWidth - 4 });
   }, []);
 
   useEffect(() => {
-    updateArrows();
     const el = scrollRef.current;
     if (!el) return;
-    el.addEventListener('scroll', updateArrows, { passive: true });
-    window.addEventListener('resize', updateArrows);
-    return () => {
-      el.removeEventListener('scroll', updateArrows);
-      window.removeEventListener('resize', updateArrows);
-    };
-  }, [updateArrows]);
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [measure]);
 
-  const scroll = (dir: 'left' | 'right') => {
-    scrollRef.current?.scrollBy({ left: dir === 'left' ? -660 : 660, behavior: 'smooth' });
+  const scroll = (dir: -1 | 1) => {
+    const el = scrollRef.current;
+    if (el) el.scrollBy({ left: dir * el.clientWidth * 0.9, behavior: 'smooth' });
   };
 
+  if (products.length === 0) return null;
+
   return (
-    <div className="relative">
-      {/* Left fade + arrow */}
-      {canScrollLeft && (
-        <div className="absolute left-0 top-0 bottom-2 z-10 flex items-center
-                        pr-10 hidden md:flex">
-          <button
-            onClick={() => scroll('left')}
-            aria-label="Scroll products left"
-            className="w-9 h-9 rounded-full bg-gray-100
-                       flex items-center justify-center text-gray-600
-                       hover:bg-primary hover:text-white transition-colors"
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </button>
-        </div>
-      )}
-
-      {/* Right fade + arrow */}
-      {canScrollRight && (
-        <div className="absolute right-0 top-0 bottom-2 z-10 flex items-center
-                        pl-10 hidden md:flex">
-          <button
-            onClick={() => scroll('right')}
-            aria-label="Scroll products right"
-            className="w-9 h-9 rounded-full bg-gray-100
-                       flex items-center justify-center text-gray-600
-                       hover:bg-primary hover:text-white transition-colors"
-          >
-            <ChevronRight className="w-5 h-5" />
-          </button>
-        </div>
-      )}
-
-      {/* Scrollable row */}
-      <div
-        ref={scrollRef}
-        className="flex gap-3 sm:gap-4 overflow-x-auto pb-2 -mx-4 px-4 sm:-mx-6 sm:px-6
-                   scrollbar-hide snap-x"
-      >
-        {products.map((product, i) => (
-          <div key={product._id} className="flex-none snap-start w-[165px] sm:w-[200px]">
-            <ProductCard product={product} priority={i < 4} />
+    <section aria-labelledby={headingId} className={tinted ? 'bg-surface-muted/60 py-12 sm:py-16' : 'py-12 sm:py-16'}>
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="mb-6 flex items-end justify-between gap-4">
+          <h2 id={headingId} className="text-xl font-bold tracking-tight text-foreground sm:text-2xl">
+            {title}
+          </h2>
+          <div className="flex items-center gap-1">
+            <Link href={viewAllHref} className="mr-1 inline-flex h-11 items-center text-sm font-semibold text-primary hover:underline">
+              View all<span className="sr-only"> {title.toLowerCase()}</span>
+            </Link>
+            <IconButton label={`Scroll ${title} left`} variant="outline" size="sm" onClick={() => scroll(-1)} disabled={edges.start} className="hidden md:inline-flex">
+              <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+            </IconButton>
+            <IconButton label={`Scroll ${title} right`} variant="outline" size="sm" onClick={() => scroll(1)} disabled={edges.end} className="hidden md:inline-flex">
+              <ChevronRight className="h-4 w-4" aria-hidden="true" />
+            </IconButton>
           </div>
-        ))}
+        </div>
+
+        <ul
+          ref={scrollRef}
+          onScroll={measure}
+          className="scrollbar-hide -mx-4 flex snap-x scroll-px-4 gap-3 overflow-x-auto px-4 pb-2 sm:-mx-6 sm:scroll-px-6 sm:gap-5 sm:px-6 lg:mx-0 lg:scroll-px-0 lg:px-0"
+        >
+          {products.map((product, i) => (
+            <li key={product._id} className="w-[44%] flex-none snap-start sm:w-[30%] lg:w-[calc((100%-3*1.25rem)/4)]">
+              <ProductCard product={product} priority={i < 2} />
+            </li>
+          ))}
+        </ul>
       </div>
-    </div>
+    </section>
   );
 }

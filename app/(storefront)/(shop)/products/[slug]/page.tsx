@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import Link from 'next/link';
+import Breadcrumbs from '@/components/ui/Breadcrumbs';
 import { fetchProduct, fetchProducts } from '@/lib/api/products';
 import { buildProductMetadata, buildProductJsonLd, buildBreadcrumbJsonLd } from '@/lib/seo';
 import type { Product } from '@/types/product';
@@ -67,50 +67,29 @@ export default async function ProductDetailPage({ params }: { params: Params }) 
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
       />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* Breadcrumb */}
-        <nav aria-label="Breadcrumb" className="mb-6">
-          <ol className="flex items-center gap-2 text-sm text-gray-500">
-            <li>
-              <Link href="/" className="hover:text-gray-800 transition-colors">
-                Home
-              </Link>
-            </li>
-            <li aria-hidden="true" className="text-gray-300">/</li>
-            <li>
-              <Link href="/products" className="hover:text-gray-800 transition-colors">
-                Products
-              </Link>
-            </li>
-            <li aria-hidden="true" className="text-gray-300">/</li>
-            <li>
-              <Link
-                href={`/categories/${product.category.slug}`}
-                className="hover:text-gray-800 transition-colors"
-              >
-                {product.category.name}
-              </Link>
-            </li>
-            <li aria-hidden="true" className="text-gray-300">/</li>
-            <li className="text-gray-900 font-medium truncate max-w-[200px]" aria-current="page">
-              {product.name}
-            </li>
-          </ol>
-        </nav>
+      <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
+        <Breadcrumbs
+          className="mb-6"
+          items={[
+            { label: 'Home', href: '/' },
+            { label: 'Products', href: '/products' },
+            { label: product.category.name, href: `/categories/${product.category.slug}` },
+            { label: product.name },
+          ]}
+        />
 
-        {/* Product hero: gallery + info (color-variant-aware) */}
+        {/* Gallery + purchase panel (colour-variant aware) */}
         <ProductPurchasePanel product={product} />
 
-        {/* Tabs: Description | Specifications | Reviews */}
-        <div className="mb-12">
+        {/* Description | Specifications | Reviews */}
+        <div className="mt-12 sm:mt-16">
           <ProductTabs product={product} />
         </div>
-
-        {/* Related products */}
-        {relatedProducts.length > 0 && (
-          <RelatedProducts products={relatedProducts} currentProductId={product._id} />
-        )}
       </div>
+
+      {relatedProducts.length > 0 && (
+        <RelatedProducts products={relatedProducts} currentProductId={product._id} categorySlug={product.category.slug} />
+      )}
     </>
   );
 }

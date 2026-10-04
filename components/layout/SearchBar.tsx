@@ -39,16 +39,17 @@ export default function SearchBar({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex items-center gap-2 w-full">
+    <form role="search" onSubmit={handleSubmit} className="flex w-full items-center gap-2">
       <div className="relative flex-1">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+        <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
         <input
           ref={inputRef}
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={placeholder}
-          className="w-full pl-9 pr-8 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white transition-all"
+          aria-label="Search products"
+          className="h-11 w-full rounded-lg border border-border-strong bg-surface pl-10 pr-10 text-base text-foreground transition-colors focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 sm:text-sm"
           autoComplete="off"
         />
         {query && (
@@ -56,15 +57,15 @@ export default function SearchBar({
             type="button"
             onClick={handleClear}
             aria-label="Clear search"
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:text-foreground"
           >
-            <X className="w-3.5 h-3.5" />
+            <X className="h-4 w-4" aria-hidden="true" />
           </button>
         )}
       </div>
       <button
         type="submit"
-        className="px-4 py-2.5 bg-primary text-white text-sm font-medium rounded-xl hover:bg-primary-dark transition-colors"
+        className="h-11 shrink-0 rounded-lg bg-primary px-5 text-sm font-semibold text-white transition-colors hover:bg-primary-hover"
       >
         Search
       </button>

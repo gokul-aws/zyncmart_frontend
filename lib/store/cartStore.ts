@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { toast } from 'sonner';
 import type { CartItem, CartSummary, CartResponse } from '@/types/cart';
 import { useAuthStore } from '@/lib/store/authStore';
 import {
@@ -9,15 +8,6 @@ import {
   removeFromCartServer,
   clearCartServer,
 } from '@/lib/api/cart';
-
-// The backend re-syncs the cart against live product data on every read —
-// if it removed/repriced/reduced anything, tell the user rather than
-// letting the total silently differ from what they expect.
-function showCartNotices(res: CartResponse) {
-  for (const notice of res.notices ?? []) {
-    toast.info(notice);
-  }
-}
 
 interface CartStore {
   items: CartItem[];
@@ -66,7 +56,6 @@ export const useCartStore = create<CartStore>()((set, get) => ({
     try {
       const res: CartResponse = await fetchCart();
       set({ items: res.items, summary: res.summary, loading: false });
-      showCartNotices(res);
     } catch (err) {
       set({ loading: false });
       throw err;
@@ -80,10 +69,7 @@ export const useCartStore = create<CartStore>()((set, get) => ({
     set({ loading: true });
     try {
       const res: CartResponse = await addToCartServer(productId, quantity, variantId);
-      if (isLatest(id)) {
-        set({ items: res.items, summary: res.summary, loading: false });
-        showCartNotices(res);
-      }
+      if (isLatest(id)) set({ items: res.items, summary: res.summary, loading: false });
     } catch (err) {
       if (isLatest(id)) set({ items: prev, summary: prevSummary, loading: false });
       throw err;
