@@ -26,7 +26,11 @@ export default function BestSellers({ products }: BestSellersProps) {
             View All &rarr;
           </Link>
         </div>
-        <ProductCarousel products={products} />
+        <ProductCarousel
+          products={products}
+          title="Best Sellers"
+          viewAllHref="/products?sortBy=rating"
+        />
       </div>
     </section>
   );

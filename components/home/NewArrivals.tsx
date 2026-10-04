@@ -26,7 +26,11 @@ export default function NewArrivals({ products }: NewArrivalsProps) {
             View All &rarr;
           </Link>
         </div>
-        <ProductCarousel products={products} />
+        <ProductCarousel
+          products={products}
+          title="New Arrivals"
+          viewAllHref="/products?sortBy=newest"
+        />
       </div>
     </section>
   );
