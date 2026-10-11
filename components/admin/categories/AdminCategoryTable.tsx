@@ -3,9 +3,9 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Pencil, Trash2 } from 'lucide-react';
+import { Pencil, ToggleLeft, ToggleRight } from 'lucide-react';
 import type { Category } from '@/types/category';
-import { useDeleteCategory } from '@/hooks/useAdminCategories';
+import { useToggleCategoryStatus } from '@/hooks/useAdminCategories';
 import Badge from '@/components/ui/Badge';
 import Skeleton from '@/components/ui/Skeleton';
 import { ConfirmDialog } from '@/components/ui/Dialog';
@@ -22,7 +22,7 @@ const HEADERS = ['Image', 'Name', 'Parent', 'Sort', 'Status'];
 const ACTION = 'inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground';
 
 export default function AdminCategoryTable({ categories, allCategories = categories, isLoading }: AdminCategoryTableProps) {
-  const deleteMutation = useDeleteCategory();
+  const toggleMutation = useToggleCategoryStatus();
   const [pendingDelete, setPendingDelete] = useState<Category | null>(null);
   const categoryById = Object.fromEntries(allCategories.map((c) => [c._id, c]));
 
@@ -83,13 +83,17 @@ export default function AdminCategoryTable({ categories, allCategories = categor
                       </Link>
                       <button
                         type="button"
-                        onClick={() => setPendingDelete(category)}
-                        disabled={deleteMutation.isPending}
-                        className={`${ACTION} hover:bg-error-subtle hover:text-error disabled:opacity-50`}
-                        aria-label={`Deactivate ${category.name}`}
-                        title="Deactivate"
+                        onClick={() =>
+                          category.isActive
+                            ? setPendingDelete(category)
+                            : toggleMutation.mutate({ id: category._id, isActive: true })
+                        }
+                        disabled={toggleMutation.isPending}
+                        className={`${ACTION} disabled:opacity-50`}
+                        aria-label={`${category.isActive ? 'Deactivate' : 'Activate'} ${category.name}`}
+                        title={category.isActive ? 'Deactivate' : 'Activate'}
                       >
-                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                        {category.isActive ? <ToggleRight className="h-4 w-4" aria-hidden="true" /> : <ToggleLeft className="h-4 w-4" aria-hidden="true" />}
                       </button>
                     </td>
                   </tr>
@@ -101,17 +105,17 @@ export default function AdminCategoryTable({ categories, allCategories = categor
       <ConfirmDialog
         open={pendingDelete !== null}
         title={`Deactivate "${pendingDelete?.name ?? ''}"?`}
-        // The API deactivates (soft-deletes) categories. Inactive categories are not
-        // listed here, and the admin panel has no reactivate control yet.
-        description="It will be hidden from the store and from this list. The admin panel can't reactivate categories yet."
+        description="It will be hidden from the store. You can reactivate it any time from the Inactive filter."
         confirmLabel="Deactivate category"
         destructive
-        loading={deleteMutation.isPending}
+        loading={toggleMutation.isPending}
         onCancel={() => setPendingDelete(null)}
         onConfirm={async () => {
           if (!pendingDelete) return;
           try {
-            await deleteMutation.mutateAsync(pendingDelete._id);
+            await toggleMutation.mutateAsync({ id: pendingDelete._id, isActive: false });
+          } catch {
+            // Error toast is shown by the mutation hook.
           } finally {
             setPendingDelete(null);
           }

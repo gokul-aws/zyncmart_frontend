@@ -26,11 +26,26 @@ export async function fetchCategory(slug: string): Promise<ApiResponse<Category>
   return res.json();
 }
 
+/**
+ * Admin listing — unlike the public GET /categories, this includes inactive
+ * (soft-deleted) categories and is never cached, so the Status filter and
+ * edits show up immediately.
+ */
+export async function fetchAdminCategories(): Promise<Category[]> {
+  const { data } = await api.get<ApiResponse<Category[]>>('/admin/categories');
+  // `parent` may arrive populated ({ _id, name, slug }); the admin UI works with ids.
+  return (data.data ?? []).map((category) => {
+    const parent = category.parent as unknown as string | { _id: string } | null | undefined;
+    return { ...category, parent: (typeof parent === 'object' ? parent?._id : parent) || undefined };
+  });
+}
+
 export interface CreateCategoryPayload {
   name: string;
   description?: string;
   parentId?: string | null;
   sortOrder?: number;
+  isActive?: boolean;
 }
 
 function buildCategoryFormData(payload: Partial<CreateCategoryPayload>, imageFile?: File): FormData {

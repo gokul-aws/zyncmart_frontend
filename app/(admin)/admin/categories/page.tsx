@@ -34,6 +34,8 @@ function CategoriesPageContent() {
   // 'top' = top-level only, 'sub' = any subcategory, otherwise a parent category id.
   const parent = searchParams.get('parent') ?? '';
   const sort = searchParams.get('sort') ?? 'order';
+  // Default to Active-only, same as the products page.
+  const status = searchParams.get('status') ?? 'active';
 
   // Categories that have at least one child, for the "Parent" dropdown.
   const parentOptions = useMemo(() => {
@@ -45,6 +47,8 @@ function CategoriesPageContent() {
     const query = search.trim().toLowerCase();
     return categories
       .filter((c) => {
+        if (status === 'active' && !c.isActive) return false;
+        if (status === 'inactive' && c.isActive) return false;
         if (query && ![c.name, c.slug, c.description ?? ''].some((v) => v.toLowerCase().includes(query))) return false;
         if (parent === 'top') return !c.parent;
         if (parent === 'sub') return Boolean(c.parent);
@@ -52,7 +56,7 @@ function CategoriesPageContent() {
         return true;
       })
       .sort(SORTERS[sort] ?? SORTERS.order);
-  }, [categories, search, parent, sort]);
+  }, [categories, search, parent, sort, status]);
 
   const totalItems = filtered.length;
   const totalPages = Math.ceil(totalItems / DEFAULT_PAGE_SIZE);
@@ -114,7 +118,7 @@ function CategoriesPageContent() {
 
         <button
           type="button"
-          onClick={() => handleQueryUpdate({ search: undefined, parent: undefined, sort: undefined, page: '1' })}
+          onClick={() => handleQueryUpdate({ search: undefined, parent: undefined, sort: undefined, status: undefined, page: '1' })}
           className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-100 transition-colors dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-900"
         >
           <Filter className="h-4 w-4" />
@@ -128,6 +132,20 @@ function CategoriesPageContent() {
             <div>
               <p className="text-sm font-semibold text-slate-900 dark:text-white">Filters</p>
               <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Refine the category results.</p>
+            </div>
+
+            <div>
+              <label htmlFor="fld-page-status" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">Status</label>
+              <select
+                id="fld-page-status"
+                value={status}
+                onChange={(event) => handleQueryUpdate({ status: event.target.value, page: '1' })}
+                className={SELECT}
+              >
+                <option value="all">All statuses</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
             </div>
 
             <div>

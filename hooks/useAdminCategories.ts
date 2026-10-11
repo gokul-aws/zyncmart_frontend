@@ -2,23 +2,30 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  fetchCategories,
+  fetchAdminCategories,
   createCategory,
   updateCategory,
   deleteCategory,
   type CreateCategoryPayload,
 } from '@/lib/api/categories';
-import type { Category } from '@/types/category';
 import { toast } from 'sonner';
 import { revalidateCategories } from '@/lib/actions/revalidateCategories';
+
+function errorMessage(error: unknown, fallback: string): string {
+  const err = error as { response?: { data?: { error?: string; message?: string } }; message?: string };
+  return err?.response?.data?.error || err?.response?.data?.message || err?.message || fallback;
+}
+
+function invalidateCategoryQueries(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: ['admin-categories'] });
+  queryClient.invalidateQueries({ queryKey: ['categories'] });
+  revalidateCategories().catch(() => {});
+}
 
 export function useAdminCategories() {
   return useQuery({
     queryKey: ['admin-categories'],
-    queryFn: async () => {
-      const res = await fetchCategories();
-      return res.data || [];
-    },
+    queryFn: fetchAdminCategories,
   });
 }
 
@@ -29,14 +36,11 @@ export function useCreateCategory() {
     mutationFn: ({ payload, imageFile }: { payload: CreateCategoryPayload; imageFile?: File }) =>
       createCategory(payload, imageFile),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-categories'] });
-      queryClient.invalidateQueries({ queryKey: ['categories'] });
-      revalidateCategories().catch(() => {});
+      invalidateCategoryQueries(queryClient);
       toast.success('Category created successfully');
     },
     onError: (error) => {
-      const message = error instanceof Error ? error.message : 'Failed to create category';
-      toast.error(message);
+      toast.error(errorMessage(error, 'Failed to create category'));
     },
   });
 }
@@ -48,14 +52,11 @@ export function useUpdateCategory() {
     mutationFn: ({ id, payload, imageFile }: { id: string; payload: Partial<CreateCategoryPayload>; imageFile?: File }) =>
       updateCategory(id, payload, imageFile),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-categories'] });
-      queryClient.invalidateQueries({ queryKey: ['categories'] });
-      revalidateCategories().catch(() => {});
+      invalidateCategoryQueries(queryClient);
       toast.success('Category updated successfully');
     },
     onError: (error) => {
-      const message = error instanceof Error ? error.message : 'Failed to update category';
-      toast.error(message);
+      toast.error(errorMessage(error, 'Failed to update category'));
     },
   });
 }
@@ -66,14 +67,26 @@ export function useDeleteCategory() {
   return useMutation({
     mutationFn: deleteCategory,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-categories'] });
-      queryClient.invalidateQueries({ queryKey: ['categories'] });
-      revalidateCategories().catch(() => {});
-      toast.success('Category deleted successfully');
+      invalidateCategoryQueries(queryClient);
+      toast.success('Category deactivated');
     },
     onError: (error) => {
-      const message = error instanceof Error ? error.message : 'Failed to delete category';
-      toast.error(message);
+      toast.error(errorMessage(error, 'Failed to delete category'));
+    },
+  });
+}
+
+export function useToggleCategoryStatus() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) => updateCategory(id, { isActive }),
+    onSuccess: (category) => {
+      invalidateCategoryQueries(queryClient);
+      toast.success(category.isActive ? 'Category activated' : 'Category deactivated');
+    },
+    onError: (error) => {
+      toast.error(errorMessage(error, 'Failed to update category status'));
     },
   });
 }

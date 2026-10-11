@@ -16,6 +16,7 @@ const categorySchema = z.object({
   description: z.string().optional(),
   parentId: z.string().optional().nullable(),
   sortOrder: z.number().min(0, 'Sort order must be 0 or higher').optional(),
+  isActive: z.boolean().optional(),
 });
 
 type FormData = z.infer<typeof categorySchema>;
@@ -38,6 +39,22 @@ export default function AdminCategoryForm({ initialData, categories = [] }: Admi
   );
 
   const isUpdating = !!initialData;
+
+  // A category can't be nested under itself or any of its own descendants.
+  const excludedParentIds = new Set<string>();
+  if (initialData) {
+    excludedParentIds.add(initialData._id);
+    let added = true;
+    while (added) {
+      added = false;
+      for (const cat of categories) {
+        if (cat.parent && excludedParentIds.has(cat.parent) && !excludedParentIds.has(cat._id)) {
+          excludedParentIds.add(cat._id);
+          added = true;
+        }
+      }
+    }
+  }
   const isLoading = createMutation.isPending || updateMutation.isPending;
 
   const {
@@ -51,6 +68,7 @@ export default function AdminCategoryForm({ initialData, categories = [] }: Admi
       description: initialData?.description ?? '',
       parentId: initialData?.parent ?? null,
       sortOrder: initialData?.sortOrder ?? 1,
+      isActive: initialData?.isActive ?? true,
     },
   });
 
@@ -84,7 +102,10 @@ export default function AdminCategoryForm({ initialData, categories = [] }: Admi
       if (isUpdating && initialData) {
         await updateMutation.mutateAsync({ id: initialData._id, payload: data, imageFile: imageFile ?? undefined });
       } else {
-        await createMutation.mutateAsync({ payload: data, imageFile: imageFile ?? undefined });
+        // New categories always start active on the API side.
+        const payload = { ...data };
+        delete payload.isActive;
+        await createMutation.mutateAsync({ payload, imageFile: imageFile ?? undefined });
       }
       router.push('/admin/categories');
     } catch (error) {
@@ -172,10 +193,11 @@ export default function AdminCategoryForm({ initialData, categories = [] }: Admi
         >
           <option value="">No parent (top-level category)</option>
           {categories
-            .filter((cat) => cat._id !== initialData?._id)
+            .filter((cat) => !excludedParentIds.has(cat._id))
             .map((category) => (
               <option key={category._id} value={category._id}>
                 {category.name}
+                {category.isActive ? '' : ' (inactive)'}
               </option>
             ))}
         </select>
@@ -195,6 +217,22 @@ export default function AdminCategoryForm({ initialData, categories = [] }: Admi
         />
         {errors.sortOrder && <p className="mt-1 text-xs text-error">{errors.sortOrder.message}</p>}
       </div>
+
+      {/* Status — create always starts active on the API side */}
+      {isUpdating && (
+        <label htmlFor="fld-admincategoryform-isActive" className="flex items-start gap-3">
+          <input
+            id="fld-admincategoryform-isActive"
+            type="checkbox"
+            {...register('isActive')}
+            className="mt-0.5 h-4 w-4 accent-primary"
+          />
+          <span>
+            <span className="block text-sm font-medium text-slate-700 dark:text-slate-200">Active</span>
+            <span className="block text-xs text-slate-500 dark:text-slate-400">Inactive categories are hidden from the storefront.</span>
+          </span>
+        </label>
+      )}
 
       <div className="flex gap-4 pt-4">
         <button
