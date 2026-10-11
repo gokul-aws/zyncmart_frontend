@@ -148,7 +148,7 @@ export function useAuth() {
     }
     clearAuth();
     useCartStore.setState({ items: [], loading: false });
-    useCartStore.getState().loadCart();
+    useCartStore.getState().loadCart().catch(() => {});
     router.push('/');
   };
 

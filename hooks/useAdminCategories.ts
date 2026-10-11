@@ -10,6 +10,7 @@ import {
 } from '@/lib/api/categories';
 import type { Category } from '@/types/category';
 import { toast } from 'sonner';
+import { revalidateCategories } from '@/lib/actions/revalidateCategories';
 
 export function useAdminCategories() {
   return useQuery({
@@ -29,6 +30,8 @@ export function useCreateCategory() {
       createCategory(payload, imageFile),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-categories'] });
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
+      revalidateCategories().catch(() => {});
       toast.success('Category created successfully');
     },
     onError: (error) => {
@@ -46,6 +49,8 @@ export function useUpdateCategory() {
       updateCategory(id, payload, imageFile),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-categories'] });
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
+      revalidateCategories().catch(() => {});
       toast.success('Category updated successfully');
     },
     onError: (error) => {
@@ -62,6 +67,8 @@ export function useDeleteCategory() {
     mutationFn: deleteCategory,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-categories'] });
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
+      revalidateCategories().catch(() => {});
       toast.success('Category deleted successfully');
     },
     onError: (error) => {

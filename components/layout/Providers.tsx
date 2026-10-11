@@ -21,7 +21,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   );
 
   useEffect(() => {
-    useCartStore.getState().loadCart();
+    useCartStore.getState().loadCart().catch(() => {});
   }, []);
 
   return (
