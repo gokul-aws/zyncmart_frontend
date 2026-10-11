@@ -13,16 +13,18 @@ import { AdminTableCard, TABLE, THEAD, TH, TBODY, TR, TD } from '@/components/ad
 
 interface AdminCategoryTableProps {
   categories: Category[];
+  /** Full category list for resolving parent names when `categories` is a filtered/paged subset. */
+  allCategories?: Category[];
   isLoading?: boolean;
 }
 
 const HEADERS = ['Image', 'Name', 'Parent', 'Sort', 'Status'];
 const ACTION = 'inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground';
 
-export default function AdminCategoryTable({ categories, isLoading }: AdminCategoryTableProps) {
+export default function AdminCategoryTable({ categories, allCategories = categories, isLoading }: AdminCategoryTableProps) {
   const deleteMutation = useDeleteCategory();
   const [pendingDelete, setPendingDelete] = useState<Category | null>(null);
-  const categoryById = Object.fromEntries(categories.map((c) => [c._id, c]));
+  const categoryById = Object.fromEntries(allCategories.map((c) => [c._id, c]));
 
   if (!isLoading && categories.length === 0) {
     return (
