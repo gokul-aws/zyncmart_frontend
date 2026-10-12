@@ -7,13 +7,17 @@ import { ShoppingBag, User, Search, Heart, LayoutDashboard, X } from 'lucide-rea
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useCartStore } from '@/lib/store/cartStore';
 import { useAuthStore } from '@/lib/store/authStore';
-import { useCategories } from '@/hooks/useCategories';
 import { useHydrated } from '@/lib/useHydrated';
 import { cn } from '@/lib/utils';
 import IconButton from '@/components/ui/IconButton';
 import HeaderSearchPanel from './HeaderSearchPanel';
 
-const MAX_NAV_CATEGORIES = 4;
+const NAV_LINKS = [
+  { label: 'Home', href: '/' },
+  { label: 'Shop All', href: '/products' },
+  { label: 'Categories', href: '/categories' },
+  { label: 'About Us', href: '/about' },
+];
 
 // No display utility here: each link sets its own (inline-flex / hidden …)
 // so responsive visibility never conflicts.
@@ -44,8 +48,6 @@ export default function Header() {
   const toggleCartDrawer = useCartStore((state) => state.toggleDrawer);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated());
   const isAdmin = useAuthStore((state) => state.user?.role === 'admin');
-  const { data: categories = [] } = useCategories();
-  const navCategories = categories.filter((c) => c.isActive && !c.parent).slice(0, MAX_NAV_CATEGORIES);
 
   const closeSearch = useCallback(() => {
     setSearchOpen(false);
@@ -71,10 +73,12 @@ export default function Header() {
 
   const cartCount = hydrated ? itemCount : 0;
   const signedIn = hydrated && isAuthenticated;
+  // Sub-pages (e.g. /categories/shoes, /products/x) keep their section tab highlighted.
+  const isActive = (href: string) => (href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(`${href}/`));
   const navLink = (href: string) =>
     cn(
       'rounded-md px-3 py-2 text-sm font-medium transition-colors',
-      pathname === href ? 'text-white' : 'text-white/75 hover:text-white'
+      isActive(href) ? 'text-white' : 'text-white/75 hover:text-white'
     );
 
   return (
@@ -82,19 +86,12 @@ export default function Header() {
       <div className="mx-auto flex h-14 max-w-7xl items-center gap-4 px-4 sm:h-16 sm:px-6 lg:px-8">
         <ZyncmartLogo />
 
-        {/* Desktop: shop navigation from the real category list */}
-        <nav className="hidden items-center lg:flex" aria-label="Shop">
-          <Link href="/products" className={navLink('/products')} aria-current={pathname === '/products' ? 'page' : undefined}>
-            All products
-          </Link>
-          {navCategories.map((cat) => {
-            const href = `/categories/${cat.slug}`;
-            return (
-              <Link key={cat._id} href={href} className={navLink(href)} aria-current={pathname === href ? 'page' : undefined}>
-                {cat.name}
-              </Link>
-            );
-          })}
+        <nav className="hidden items-center lg:flex" aria-label="Main">
+          {NAV_LINKS.map(({ label, href }) => (
+            <Link key={href} href={href} className={navLink(href)} aria-current={pathname === href ? 'page' : undefined}>
+              {label}
+            </Link>
+          ))}
         </nav>
 
         <div className="ml-auto flex items-center gap-1">

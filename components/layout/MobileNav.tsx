@@ -2,26 +2,26 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, LayoutGrid, Search, ShoppingBag, User } from 'lucide-react';
-import { useCartStore } from '@/lib/store/cartStore';
-import { useHydrated } from '@/lib/useHydrated';
+import { Home, LayoutGrid, Package, Store, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-// Five destinations (the bottom-nav maximum). Orders, addresses and the
-// wishlist live under Account.
+// Mirrors the header's main tabs (About Us swapped for My Orders), plus
+// Account — the header hides its account icon below md. Search and cart stay
+// in the header on mobile.
 const NAV_ITEMS = [
   { label: 'Home', href: '/', icon: Home },
+  { label: 'Shop All', href: '/products', icon: Store },
   { label: 'Categories', href: '/categories', icon: LayoutGrid },
-  { label: 'Search', href: '/search', icon: Search },
-  { label: 'Cart', href: '/cart', icon: ShoppingBag },
+  { label: 'My Orders', href: '/account/orders', icon: Package },
   { label: 'Account', href: '/account', icon: User },
 ] as const;
 
 export default function MobileNav() {
   const pathname = usePathname();
-  const hydrated = useHydrated();
-  const itemCount = useCartStore((state) => state.items.reduce((sum, item) => sum + item.quantity, 0));
-  const cartCount = hydrated ? itemCount : 0;
+  // Longest matching href wins, so /account/orders highlights My Orders, not Account.
+  const activeHref = NAV_ITEMS.map((item) => item.href)
+    .filter((href) => pathname === href || (href !== '/' && pathname.startsWith(`${href}/`)))
+    .sort((a, b) => b.length - a.length)[0];
 
   return (
     <nav
@@ -30,7 +30,7 @@ export default function MobileNav() {
     >
       <ul className="flex h-16">
         {NAV_ITEMS.map(({ label, href, icon: Icon }) => {
-          const isActive = pathname === href || (href !== '/' && pathname.startsWith(href));
+          const isActive = href === activeHref;
           return (
             <li key={href} className="flex-1">
               <Link
@@ -41,16 +41,8 @@ export default function MobileNav() {
                   isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
                 )}
               >
-                <span className="relative">
-                  <Icon className="h-5 w-5" aria-hidden="true" />
-                  {label === 'Cart' && cartCount > 0 && (
-                    <span className="absolute -right-2.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1 text-xs font-bold leading-none text-white">
-                      {cartCount > 9 ? '9+' : cartCount}
-                    </span>
-                  )}
-                </span>
+                <Icon className="h-5 w-5" aria-hidden="true" />
                 {label}
-                {label === 'Cart' && cartCount > 0 && <span className="sr-only">, {cartCount} item{cartCount === 1 ? '' : 's'}</span>}
               </Link>
             </li>
           );
